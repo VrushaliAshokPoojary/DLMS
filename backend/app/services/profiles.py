@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
+
 from sqlalchemy import JSON, Column, DateTime, MetaData, String, Table, create_engine, select
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -86,3 +87,10 @@ class ProfileRepository:
             ]
         except SQLAlchemyError:
             return list(self._profiles.values())
+
+
+    def store(self, profile: MeterProfile) -> None:
+        self._profiles[profile.profile_id] = profile
+
+    def list(self) -> list[MeterProfile]:
+        return list(self._profiles.values())

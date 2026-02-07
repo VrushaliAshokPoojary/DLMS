@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from ipaddress import ip_network
@@ -11,12 +12,19 @@ from pymongo.errors import PyMongoError
 
 from app.config import settings
 from app.models.core import DiscoveryLog, DiscoveryRequest, DiscoveryResult, MeterInstance
+
+from datetime import datetime
+from uuid import uuid4
+
+from app.models.core import DiscoveryRequest, DiscoveryResult, MeterInstance
+
 from app.services.emulator import EmulatorRegistry
 
 
 class DiscoveryEngine:
     def __init__(self, registry: EmulatorRegistry) -> None:
         self._registry = registry
+
         self._collection = None
         self._init_db()
 
@@ -56,6 +64,29 @@ class DiscoveryEngine:
         except PyMongoError:
             return []
 
+
+
+    def scan(self, request: DiscoveryRequest) -> list[DiscoveryResult]:
+        results: list[DiscoveryResult] = []
+        for instance in self._registry.list_instances():
+            result = self._to_result(instance)
+            results.append(result)
+        if not results:
+            results.append(
+                DiscoveryResult(
+                    meter_id=str(uuid4()),
+                    ip_address="0.0.0.0",
+                    port=request.ports[0],
+                    discovered_at=datetime.utcnow(),
+                    vendor=None,
+                    model=None,
+                    authentication=None,
+                    security_suite=None,
+                )
+            )
+        return results
+
+
     @staticmethod
     def _to_result(instance: MeterInstance) -> DiscoveryResult:
         return DiscoveryResult(
@@ -68,6 +99,7 @@ class DiscoveryEngine:
             authentication=instance.authentication,
             security_suite=instance.security_suite,
         )
+
 
     @staticmethod
     def _expand_targets(ip_range: str, ports: list[int]) -> list[tuple[str, int]]:
@@ -139,3 +171,4 @@ class DiscoveryEngine:
             self._collection.insert_one(log.model_dump())
         except PyMongoError:
             return
+

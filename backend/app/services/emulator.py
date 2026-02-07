@@ -28,8 +28,13 @@ class EmulatorRegistry:
             model=template.model,
             ip_address=ip_address,
             port=port,
+
             authentication=template.authentication_modes[0],
             security_suite=template.security_suites[0],
+
+            authentication="LLS",
+            security_suite=1,
+
             obis_objects=template.obis_objects,
         )
         self._instances[meter_id] = instance
@@ -37,6 +42,7 @@ class EmulatorRegistry:
 
     def list_instances(self) -> list[MeterInstance]:
         return list(self._instances.values())
+
 
     def find_instance(self, ip_address: str, port: int) -> MeterInstance | None:
         for instance in self._instances.values():
@@ -50,8 +56,10 @@ DEFAULT_TEMPLATES = [
         vendor="Acme Energy",
         model="A1000",
         referencing="LN",
+
         authentication_modes=["LLS", "HLS"],
         security_suites=[1, 2],
+
         obis_objects=[
             ObisObject(code="1-0:1.8.0", description="Active energy import", data_type="double", unit="kWh"),
             ObisObject(code="1-0:2.8.0", description="Active energy export", data_type="double", unit="kWh"),
@@ -61,8 +69,10 @@ DEFAULT_TEMPLATES = [
         vendor="Zenith Power",
         model="Z900",
         referencing="SN",
+
         authentication_modes=["None", "LLS"],
         security_suites=[0, 1],
+
         obis_objects=[
             ObisObject(code="1-0:32.7.0", description="Voltage L1", data_type="double", unit="V"),
             ObisObject(code="1-0:52.7.0", description="Voltage L2", data_type="double", unit="V"),

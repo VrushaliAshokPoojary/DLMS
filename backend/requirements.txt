@@ -3,5 +3,7 @@ uvicorn[standard]==0.30.6
 pydantic==2.8.2
 pydantic-settings==2.4.0
 sqlalchemy==2.0.34
-psycopg2-binary==2.9.9
+# psycopg2-binary==2.9.9
+
+
 motor==3.5.1

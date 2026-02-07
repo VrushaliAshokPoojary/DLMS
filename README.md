@@ -49,6 +49,8 @@ uvicorn app.main:app --reload
 
 The backend stores **meter profiles** in PostgreSQL (table: `meter_profiles`) and **fingerprints** in MongoDB (`fingerprints` collection). If databases are unavailable, it falls back to in-memory storage.
 
+If `API_KEY` is set in the environment, the API requires the `X-API-Key` header on every request.
+
 ### Frontend
 
 ```bash
@@ -77,15 +79,27 @@ The backend exposes OpenAPI/Swagger docs at `http://localhost:8000/docs`.
      -H "Content-Type: application/json" \
      -d '{"ip_range":"127.0.0.0/30","ports":[4059],"max_concurrency":50}'
    ```
-4. Run association handshake (simulated AARQ/AARE):
+4. Review discovery logs:
+   ```bash
+   curl http://localhost:8000/discovery/logs
+   ```
+5. Run association handshake (simulated AARQ/AARE):
    ```bash
    curl -X POST http://localhost:8000/associations/<meter_id>
    ```
-5. Generate fingerprint:
+6. Normalize OBIS mapping:
+   ```bash
+   curl http://localhost:8000/obis/normalize/<meter_id>
+   ```
+7. Classify vendor:
+   ```bash
+   curl http://localhost:8000/vendors/classify/<meter_id>
+   ```
+8. Generate fingerprint:
    ```bash
    curl -X POST http://localhost:8000/fingerprints/<meter_id>
    ```
-6. Generate meter profile:
+9. Generate meter profile:
    ```bash
    curl -X POST http://localhost:8000/profiles/<meter_id>
    ```

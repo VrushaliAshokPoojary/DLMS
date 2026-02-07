@@ -8,20 +8,26 @@ from pymongo.errors import PyMongoError
 
 from app.config import settings
 from app.models.core import Fingerprint, MeterInstance
+from app.services.vendor import VendorClassifier
 
 
 class FingerprintingEngine:
+    def __init__(self) -> None:
+        self._classifier = VendorClassifier()
+
     def build_fingerprint(self, meter: MeterInstance) -> Fingerprint:
         signature = f"{meter.vendor}:{meter.model}:{meter.authentication}:{meter.security_suite}"
         features = {
             "referencing": "LN" if meter.model.endswith("0") else "SN",
             "obis_count": str(len(meter.obis_objects)),
         }
+        classification = self._classifier.classify(meter)
         return Fingerprint(
             meter_id=meter.meter_id,
             vendor_signature=signature,
             features=features,
             created_at=datetime.utcnow(),
+            vendor_classification=classification.classification,
         )
 
 

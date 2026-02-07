@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     mongo_url: str = "mongodb://localhost:27017"
     mongo_db: str = "dlms"
+    api_key: str | None = None
 
     @property
     def postgres_dsn(self) -> str:

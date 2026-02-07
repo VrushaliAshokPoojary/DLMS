@@ -68,6 +68,7 @@ npm run dev
 
 The backend exposes OpenAPI/Swagger docs at `http://localhost:8000/docs`.
 
+
 ## API Walkthrough (Quick Demo)
 
 1. List emulator templates:
@@ -112,6 +113,7 @@ The backend exposes OpenAPI/Swagger docs at `http://localhost:8000/docs`.
    ```bash
    curl -X POST http://localhost:8000/profiles/<meter_id>
    ```
+
 
 ## Project Structure
 

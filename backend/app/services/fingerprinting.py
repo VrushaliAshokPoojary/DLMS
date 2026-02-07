@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
+
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
@@ -15,25 +16,36 @@ class FingerprintingEngine:
     def __init__(self) -> None:
         self._classifier = VendorClassifier()
 
+
+from app.models.core import Fingerprint, MeterInstance
+
+
+class FingerprintingEngine:
+
     def build_fingerprint(self, meter: MeterInstance) -> Fingerprint:
         signature = f"{meter.vendor}:{meter.model}:{meter.authentication}:{meter.security_suite}"
         features = {
             "referencing": "LN" if meter.model.endswith("0") else "SN",
             "obis_count": str(len(meter.obis_objects)),
         }
+
         classification = self._classifier.classify(meter)
+
         return Fingerprint(
             meter_id=meter.meter_id,
             vendor_signature=signature,
             features=features,
             created_at=datetime.utcnow(),
+
             vendor_classification=classification.classification,
+
         )
 
 
 class FingerprintLog:
     def __init__(self) -> None:
         self._logs: dict[str, Fingerprint] = {}
+
         self._collection = None
         self._init_db()
 
@@ -62,3 +74,11 @@ class FingerprintLog:
             return [Fingerprint(**doc) for doc in docs]
         except PyMongoError:
             return list(self._logs.values())
+
+
+    def store(self, fingerprint: Fingerprint) -> None:
+        self._logs[str(uuid4())] = fingerprint
+
+    def list(self) -> list[Fingerprint]:
+        return list(self._logs.values())
+

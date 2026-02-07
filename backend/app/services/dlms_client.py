@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+import requests
+
 from app.config import settings
 from app.models.core import AssociationReport, MeterInstance, ObisNormalizationResult
 
@@ -20,8 +22,6 @@ class DlmsClient:
 
     def associate(self, meter: MeterInstance) -> AssociationReport:
         if self._adapter_url:
-            import requests
-
             payload = {
                 "meter_id": meter.meter_id,
                 "ip_address": meter.ip_address,
@@ -55,8 +55,6 @@ class DlmsClient:
 
     def fetch_obis(self, meter: MeterInstance) -> ObisNormalizationResult:
         if self._adapter_url:
-            import requests
-
             payload = {
                 "meter_id": meter.meter_id,
                 "ip_address": meter.ip_address,
@@ -80,8 +78,6 @@ class DlmsClient:
     def health(self) -> dict[str, Any]:
         if not self._adapter_url:
             return {"status": "disabled"}
-        import requests
-
         response = requests.get(f"{self._adapter_url}/health", timeout=5)
         response.raise_for_status()
         return response.json()

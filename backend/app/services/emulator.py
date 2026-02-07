@@ -28,12 +28,11 @@ class EmulatorRegistry:
             model=template.model,
             ip_address=ip_address,
             port=port,
-            authentication="LLS",
-            security_suite=1,
             authentication=template.authentication_modes[0],
             security_suite=template.security_suites[0],
             obis_objects=template.obis_objects,
             )
+
 
         self._instances[meter_id] = instance
         return instance

@@ -14,6 +14,7 @@ from app.models.core import (
 )
 from app.services.association import AssociationNegotiator
 from app.services.discovery import DiscoveryEngine
+from app.services.dlms_client import DlmsClient
 from app.services.emulator import EmulatorRegistry, seed_registry
 from app.services.fingerprinting import FingerprintLog, FingerprintingEngine
 from app.services.obis import ObisNormalizer
@@ -40,6 +41,7 @@ profile_repo = ProfileRepository()
 association_negotiator = AssociationNegotiator()
 obis_normalizer = ObisNormalizer()
 vendor_classifier = VendorClassifier()
+dlms_client = DlmsClient()
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
@@ -123,6 +125,8 @@ def associate_meter(meter_id: str) -> AssociationReport:
             aare="",
             created_at=datetime.utcnow(),
         )
+    if settings.dlms_adapter_url:
+        return dlms_client.associate(meter)
     return association_negotiator.negotiate(meter)
 
 
@@ -131,7 +135,14 @@ def normalize_obis(meter_id: str) -> ObisNormalizationResult:
     meter = next((m for m in registry.list_instances() if m.meter_id == meter_id), None)
     if not meter:
         raise HTTPException(status_code=404, detail="meter_not_found")
+    if settings.dlms_adapter_url:
+        return dlms_client.fetch_obis(meter)
     return obis_normalizer.normalize(meter)
+
+
+@app.get("/dlms/adapter/health", dependencies=[Depends(require_api_key)])
+def adapter_health() -> dict[str, object]:
+    return dlms_client.health()
 
 
 @app.get("/vendors/classify/{meter_id}", response_model=VendorClassification, dependencies=[Depends(require_api_key)])

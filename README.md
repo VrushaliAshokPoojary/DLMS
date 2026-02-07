@@ -51,6 +51,11 @@ The backend stores **meter profiles** in PostgreSQL (table: `meter_profiles`) an
 
 If `API_KEY` is set in the environment, the API requires the `X-API-Key` header on every request.
 
+To enable real DLMS protocol operations (AARQ/AARE, OBIS extraction), set `DLMS_ADAPTER_URL` to a Gurux/OpenMUC adapter service that exposes:
+- `POST /associate` (returns `status`, `authentication`, `security_suite`, `aarq`, `aare`)
+- `POST /obis` (returns `normalized` OBIS mappings)
+- `GET /health`
+
 ### Frontend
 
 ```bash
@@ -91,15 +96,19 @@ The backend exposes OpenAPI/Swagger docs at `http://localhost:8000/docs`.
    ```bash
    curl http://localhost:8000/obis/normalize/<meter_id>
    ```
-7. Classify vendor:
+7. Check DLMS adapter health (if configured):
+   ```bash
+   curl http://localhost:8000/dlms/adapter/health
+   ```
+8. Classify vendor:
    ```bash
    curl http://localhost:8000/vendors/classify/<meter_id>
    ```
-8. Generate fingerprint:
+9. Generate fingerprint:
    ```bash
    curl -X POST http://localhost:8000/fingerprints/<meter_id>
    ```
-9. Generate meter profile:
+10. Generate meter profile:
    ```bash
    curl -X POST http://localhost:8000/profiles/<meter_id>
    ```

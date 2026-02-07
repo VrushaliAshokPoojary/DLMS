@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     mongo_url: str = "mongodb://localhost:27017"
     mongo_db: str = "dlms"
 
+    api_key: str | None = None
+    dlms_adapter_url: str | None = None
+
+
     @property
     def postgres_dsn(self) -> str:
         return (

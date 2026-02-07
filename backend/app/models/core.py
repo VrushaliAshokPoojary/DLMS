@@ -14,6 +14,10 @@ class MeterTemplate(BaseModel):
     vendor: str
     model: str
     referencing: Literal["LN", "SN"]
+
+    authentication_modes: list[Literal["None", "LLS", "HLS"]] = Field(default_factory=lambda: ["LLS"])
+    security_suites: list[Literal[0, 1, 2]] = Field(default_factory=lambda: [1])
+
     obis_objects: list[ObisObject]
 
 
@@ -33,6 +37,10 @@ class DiscoveryRequest(BaseModel):
     ports: list[int] = Field(default_factory=lambda: [4059])
     max_concurrency: int = 200
 
+    timeout_seconds: float = 0.5
+    retries: int = 1
+
+
 
 class DiscoveryResult(BaseModel):
     meter_id: str
@@ -44,12 +52,28 @@ class DiscoveryResult(BaseModel):
     authentication: str | None = None
     security_suite: int | None = None
 
+    reachable: bool = True
+
+
+class DiscoveryLog(BaseModel):
+    scan_id: str
+    ip_range: str
+    ports: list[int]
+    total_targets: int
+    discovered: int
+    started_at: datetime
+    completed_at: datetime
+
+
 
 class Fingerprint(BaseModel):
     meter_id: str
     vendor_signature: str
     features: dict[str, str]
     created_at: datetime
+
+    vendor_classification: str | None = None
+
 
 
 class MeterProfile(BaseModel):
@@ -59,3 +83,30 @@ class MeterProfile(BaseModel):
     model: str
     obis_map: dict[str, str]
     created_at: datetime
+
+
+
+class AssociationReport(BaseModel):
+    meter_id: str
+    status: Literal["success", "failed"]
+    authentication: str
+    security_suite: int
+    aarq: str
+    aare: str
+    created_at: datetime
+
+
+class ObisNormalizationResult(BaseModel):
+    meter_id: str
+    normalized: dict[str, str]
+    created_at: datetime
+
+
+class VendorClassification(BaseModel):
+    meter_id: str
+    vendor: str
+    model: str
+    classification: str
+    confidence: float
+    created_at: datetime
+

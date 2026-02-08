@@ -76,7 +76,8 @@ The backend exposes OpenAPI/Swagger docs at `http://localhost:8000/docs`.
 
 1. List emulator templates:
    ```bash
-   curl http://localhost:8000/emulators/templates
+   curl.exe http://localhost:8000/emulators/templates
+
    ```
 2. Create a virtual meter instance:
    ```bash

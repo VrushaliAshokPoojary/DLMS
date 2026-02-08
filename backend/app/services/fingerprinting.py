@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
-
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
@@ -18,6 +17,7 @@ class FingerprintingEngine:
 
     def build_fingerprint(self, meter: MeterInstance) -> Fingerprint:
         signature = f"{meter.vendor}:{meter.model}:{meter.authentication}:{meter.security_suite}"
+
         features = {
             "referencing": "LN" if meter.model.endswith("0") else "SN",
             "obis_count": str(len(meter.obis_objects)),
@@ -29,15 +29,14 @@ class FingerprintingEngine:
             meter_id=meter.meter_id,
             vendor_signature=signature,
             features=features,
-            created_at=datetime.utcnow(),
             vendor_classification=classification.classification,
+            created_at=datetime.utcnow(),
         )
 
 
 class FingerprintLog:
     def __init__(self) -> None:
         self._logs: dict[str, Fingerprint] = {}
-
         self._collection = None
         self._init_db()
 
@@ -51,16 +50,21 @@ class FingerprintLog:
 
     def store(self, fingerprint: Fingerprint) -> None:
         self._logs[str(uuid4())] = fingerprint
-        if not self._collection:
+
+        if self._collection is None:
             return
+
         try:
-            self._collection.insert_one(fingerprint.model_dump())
+            doc = fingerprint.model_dump()
+            doc["created_at"] = fingerprint.created_at  # BSON-safe datetime
+            self._collection.insert_one(doc)
         except PyMongoError:
             return
 
     def list(self) -> list[Fingerprint]:
-        if not self._collection:
+        if self._collection is None:
             return list(self._logs.values())
+
         try:
             docs = list(self._collection.find({}, {"_id": 0}))
             return [Fingerprint(**doc) for doc in docs]

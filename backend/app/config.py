@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     api_key: str | None = None
     dlms_adapter_url: str | None = None
 
-
     @property
     def postgres_dsn(self) -> str:
         return (

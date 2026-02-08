@@ -46,6 +46,25 @@ vendor_classifier = VendorClassifier()
 dlms_client = DlmsClient()
 
 
+@app.on_event("startup")
+def seed_sample_data() -> None:
+    if not settings.seed_sample_data:
+        return
+    if registry.list_instances():
+        return
+    for index, template in enumerate(registry.list_templates()):
+        instance = registry.create_instance(
+            vendor=template.vendor,
+            model=template.model,
+            ip_address="127.0.0.1",
+            port=4059 + index,
+        )
+        fingerprint = fingerprinting_engine.build_fingerprint(instance)
+        fingerprint_log.store(fingerprint)
+        profile = profile_generator.build_profile(instance)
+        profile_repo.store(profile)
+
+
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     if not settings.api_key:
         return

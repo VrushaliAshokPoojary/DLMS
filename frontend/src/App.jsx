@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { fetchSummary } from './components/api.js'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const apiKey = import.meta.env.VITE_API_KEY
 
 export default function App() {
   const [summary, setSummary] = useState({ templates: 0, instances: 0, profiles: 0 })
 
   useEffect(() => {
-    fetchSummary(apiUrl).then(setSummary).catch(() => setSummary(summary))
+    fetchSummary(apiUrl, apiKey).then(setSummary).catch(() => setSummary(summary))
   }, [])
 
   return (

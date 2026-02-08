@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     api_key: str | None = None
     dlms_adapter_url: str | None = None
+    seed_sample_data: bool = False   # ✅ ADD THIS LINE
 
     @property
     def postgres_dsn(self) -> str:

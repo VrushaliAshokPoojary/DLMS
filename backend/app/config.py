@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_driver: str = "psycopg"
-    seed_sample_data: bool = False
     mongo_url: str = "mongodb://localhost:27017"
     mongo_db: str = "dlms"
 

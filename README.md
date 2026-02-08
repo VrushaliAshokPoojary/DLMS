@@ -29,6 +29,9 @@ backend (FastAPI)
    ```bash
    cp .env.example .env
    ```
+   - To require an API key for backend access, set `API_KEY` in `.env` and also set `VITE_API_KEY` so the frontend can send the header.
+   - To seed sample data on startup (useful for the dashboard), set `SEED_SAMPLE_DATA=true`.
+   - To switch Postgres drivers, set `POSTGRES_DRIVER` (default: `psycopg`).
 3. Start the stack:
    ```bash
    docker compose up --build

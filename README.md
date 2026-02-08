@@ -116,3 +116,8 @@ infra/     Nginx reverse-proxy configuration
 ## License
 
 MIT
+
+👨‍💻 Author
+
+Vrushali A Poojary
+Software Engineering | AIML | DLMS/COSEM 

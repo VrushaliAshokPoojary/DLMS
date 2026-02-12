@@ -7,7 +7,7 @@ from typing import Any
 import requests
 
 from app.config import settings
-from app.models.core import AssociationReport, MeterInstance, ObisNormalizationResult
+from app.models.core import AssociationObjectList, AssociationReport, MeterInstance, ObisNormalizationResult
 
 
 @dataclass
@@ -50,6 +50,28 @@ class DlmsClient:
             security_suite=meter.security_suite,
             aarq=aarq,
             aare=aare,
+            created_at=datetime.utcnow(),
+        )
+
+
+    def fetch_association_objects(self, meter: MeterInstance) -> AssociationObjectList:
+        if self._adapter_url:
+            payload = {
+                "meter_id": meter.meter_id,
+                "ip_address": meter.ip_address,
+                "port": meter.port,
+            }
+            response = requests.post(f"{self._adapter_url}/association-objects", json=payload, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            return AssociationObjectList(
+                meter_id=meter.meter_id,
+                objects=data.get("objects", []),
+                created_at=datetime.utcnow(),
+            )
+        return AssociationObjectList(
+            meter_id=meter.meter_id,
+            objects=[obj.code for obj in meter.obis_objects],
             created_at=datetime.utcnow(),
         )
 

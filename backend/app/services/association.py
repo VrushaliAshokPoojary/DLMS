@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.models.core import AssociationReport, MeterInstance
+from app.models.core import AssociationObjectList, AssociationReport, MeterInstance
 
 
 class AssociationNegotiator:
@@ -16,5 +16,12 @@ class AssociationNegotiator:
             security_suite=meter.security_suite,
             aarq=aarq,
             aare=aare,
+            created_at=datetime.utcnow(),
+        )
+
+    def association_objects(self, meter: MeterInstance) -> AssociationObjectList:
+        return AssociationObjectList(
+            meter_id=meter.meter_id,
+            objects=[obj.code for obj in meter.obis_objects],
             created_at=datetime.utcnow(),
         )

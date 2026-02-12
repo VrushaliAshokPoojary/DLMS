@@ -99,10 +99,13 @@ curl.exe -X POST http://localhost:8000/profiles/<meter_id>
 🔹 6. Perform DLMS Association (AARQ / AARE)
 curl.exe -X POST http://localhost:8000/associations/<meter_id>
 
-🔹 7. Normalize OBIS Codes
+🔹 7. Extract Association Object List
+curl.exe http://localhost:8000/associations/objects/<meter_id>
+
+🔹 8. Normalize OBIS Codes
 curl.exe http://localhost:8000/obis/normalize/<meter_id>
 
-🔹 8. Classify Vendor
+🔹 9. Classify Vendor
 curl.exe http://localhost:8000/vendors/classify/<meter_id>
 
 ## Project Structure

@@ -96,6 +96,12 @@ class AssociationReport(BaseModel):
     created_at: datetime
 
 
+class AssociationObjectList(BaseModel):
+    meter_id: str
+    objects: list[str]
+    created_at: datetime
+
+
 class ObisNormalizationResult(BaseModel):
     meter_id: str
     normalized: dict[str, str]
@@ -109,4 +115,3 @@ class VendorClassification(BaseModel):
     classification: str
     confidence: float
     created_at: datetime
-

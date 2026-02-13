@@ -197,4 +197,3 @@ def classify_vendor(meter_id: str) -> VendorClassification:
     if not meter:
         raise HTTPException(status_code=404, detail="meter_not_found")
     return vendor_classifier.classify(meter)
-

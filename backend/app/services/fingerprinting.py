@@ -29,8 +29,8 @@ class FingerprintingEngine:
             meter_id=meter.meter_id,
             vendor_signature=signature,
             features=features,
-            vendor_classification=classification.classification,
             created_at=datetime.utcnow(),
+            vendor_classification=classification.classification,
         )
 
 

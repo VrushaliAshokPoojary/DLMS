@@ -1,122 +1,183 @@
 # Software-Defined Universal DLMS Auto-Discovery & Fingerprinting Platform
 
-This repository contains a software-only DLMS/COSEM auto-discovery, emulator, and fingerprinting platform. It provides:
+This project is a full-stack DLMS/COSEM demo platform with:
+- A FastAPI backend for meter emulation, discovery workflows, associations, OBIS normalization, fingerprinting, and profile generation.
+- A React/Vite frontend dashboard that reads backend summary data.
+- PostgreSQL storage for generated meter profiles.
+- MongoDB storage for fingerprint and discovery logs.
 
-- Virtual DLMS meter emulators with vendor templates.
-- Network discovery and authentication negotiation workflows.
-- OBIS object extraction and normalization.
-- Vendor fingerprinting and classification.
-- REST APIs for integration with HES/MDMS systems.
-- A React dashboard for discovery operations and meter profiling.
-
-## Architecture Overview
+## 1) How the project is organized
 
 ```
-frontend (React/Vite)
+frontend (React + Vite)
    |
-   |  HTTP (JSON)
+   | HTTP/JSON
    v
 backend (FastAPI)
    |
-   +-- PostgreSQL (meter profiles/configs)
-   +-- MongoDB (fingerprint logs)
+   +-- PostgreSQL (meter_profiles)
+   +-- MongoDB (fingerprints, discovery_logs)
 ```
 
-## Quick Start (Docker)
+### Core directories
+- `backend/` – API app, business logic, DB persistence adapters.
+- `frontend/` – dashboard UI.
+- `infra/` – nginx reverse proxy config.
+- `docker-compose.yml` – local full-stack orchestration.
 
-1. Ensure Docker and Docker Compose are installed.
-2. Copy environment defaults and update credentials if needed:
+## 2) Backend behavior (what each module does)
+
+### Emulator and templates
+- The backend seeds built-in meter templates at startup.
+- You can create virtual meter instances from templates.
+- Endpoints:
+  - `GET /emulators/templates`
+  - `POST /emulators/instances`
+  - `GET /emulators/instances`
+
+### Discovery
+- `POST /discovery/scan` returns discovered results.
+- `GET /discovery/logs` returns discovery log documents from MongoDB (if available).
+
+### Fingerprinting
+- `POST /fingerprints/{meter_id}` generates and stores a fingerprint.
+- `GET /fingerprints` lists stored fingerprints.
+
+### Profiles
+- `POST /profiles/{meter_id}` generates and stores a profile in PostgreSQL.
+- `GET /profiles` lists profiles.
+
+### DLMS protocol simulation/integration
+- `POST /associations/{meter_id}` returns association report.
+- `GET /obis/normalize/{meter_id}` returns normalized OBIS mapping.
+- `GET /dlms/adapter/health` checks adapter status.
+- `GET /vendors/classify/{meter_id}` classifies vendor.
+
+## 3) Environment variables
+
+Copy `.env.example` to `.env` and edit values:
+
+```bash
+cp .env.example .env
+```
+
+### Important variables
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PORT`
+- `POSTGRES_DRIVER` (default `psycopg`)
+- `MONGO_URL`, `MONGO_DB`
+- `API_KEY` (optional; when set, backend requires `X-API-Key`)
+- `VITE_API_URL` (frontend backend URL, default `http://localhost:8000`)
+- `VITE_API_KEY` (optional; frontend sends this as `X-API-Key`)
+- `SEED_SAMPLE_DATA` (`true/false`; seeds demo instances/fingerprints/profiles on backend startup)
+- `DLMS_ADAPTER_URL` (optional external adapter for real protocol operations)
+
+## 4) Run with Docker (recommended)
+
+1. Prepare env file:
    ```bash
    cp .env.example .env
    ```
-   - To require an API key for backend access, set `API_KEY` in `.env` and also set `VITE_API_KEY` so the frontend can send the header.
-   - To seed sample data on startup (useful for the dashboard), set `SEED_SAMPLE_DATA=true`.
-   - To switch Postgres drivers, set `POSTGRES_DRIVER` (default: `psycopg`).
-3. Start the full platform with a single command:
+2. Optional demo-friendly settings in `.env`:
+   - `API_KEY=` (empty for easier demo)
+   - `SEED_SAMPLE_DATA=true`
+3. Start all services:
    ```bash
    make up
    ```
-   (or `docker compose up --build` if Make is unavailable)
-4. Open the UI at `http://localhost:5173` for the guided workflow dashboard.
+4. Open:
+   - Frontend: `http://localhost:5173`
+   - Backend docs: `http://localhost:8000/docs`
+   - Nginx entrypoint: `http://localhost:8080`
 
-## Local Development
+## 5) Run locally without Docker
 
 ### Backend
-
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-The backend stores **meter profiles** in PostgreSQL (table: `meter_profiles`) and **fingerprints** in MongoDB (`fingerprints` collection). If databases are unavailable, it falls back to in-memory storage.
-
-If `API_KEY` is set in the environment, the API requires the `X-API-Key` header on every request.
-
-To enable real DLMS protocol operations (AARQ/AARE, OBIS extraction), set `DLMS_ADAPTER_URL` to a Gurux/OpenMUC adapter service that exposes:
-- `POST /associate` (returns `status`, `authentication`, `security_suite`, `aarq`, `aare`)
-- `POST /obis` (returns `normalized` OBIS mappings)
-- `POST /association-objects` (returns `objects` list)
-- `GET /health`
-
 ### Frontend
-
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## API Documentation
+## 6) API usage notes (especially for Windows PowerShell)
 
-The backend exposes OpenAPI/Swagger docs at `http://localhost:8000/docs`.
+In PowerShell, `curl` maps to `Invoke-WebRequest` and does not accept Linux-style flags like `-X -H -d`.
 
+Use one of these approaches:
+- Use the real curl binary: `curl.exe ...`
+- Or use PowerShell cmdlets (`Invoke-RestMethod` / `Invoke-WebRequest`) with PowerShell syntax.
 
-## API Walkthrough (Quick Demo)
+### Example commands (cross-platform using `curl.exe`)
 
-📡 API Execution Flow (Step-by-Step)
-
-Follow these commands in order for a complete DLMS workflow.
-
-🔹 1. List Available Meter Templates
+1. List templates:
+```bash
 curl.exe http://localhost:8000/emulators/templates
+```
 
-🔹 2. Create a Virtual Meter Instance
+2. Create meter instance:
+```bash
 curl.exe -X POST "http://localhost:8000/emulators/instances?vendor=Acme%20Energy&model=A1000&ip_address=127.0.0.1&port=4059"
+```
 
-
-⚠️ Save the returned meter_id for next steps.
-
-🔹 3. List All Running Meter Instances
+3. List instances (copy `meter_id`):
+```bash
 curl.exe http://localhost:8000/emulators/instances
-
-🔹 4. Generate DLMS Fingerprint
-curl.exe -X POST http://localhost:8000/fingerprints/<meter_id>
-
-🔹 5. Create Meter Profile
-curl.exe -X POST http://localhost:8000/profiles/<meter_id>
-
-🔹 6. Perform DLMS Association (AARQ / AARE)
-curl.exe -X POST http://localhost:8000/associations/<meter_id>
-
-🔹 7. Extract Association Object List
-curl.exe http://localhost:8000/associations/objects/<meter_id>
-
-🔹 8. Normalize OBIS Codes
-curl.exe http://localhost:8000/obis/normalize/<meter_id>
-
-🔹 9. Classify Vendor
-curl.exe http://localhost:8000/vendors/classify/<meter_id>
-
-## Project Structure
-
 ```
-backend/   FastAPI services, discovery logic, data models
-frontend/  React dashboard
-infra/     Nginx reverse-proxy configuration
+
+4. Generate fingerprint/profile (replace `<METER_ID>`):
+```bash
+curl.exe -X POST "http://localhost:8000/fingerprints/<METER_ID>"
+curl.exe -X POST "http://localhost:8000/profiles/<METER_ID>"
 ```
+
+5. Check discovery logs:
+```bash
+curl.exe http://localhost:8000/discovery/logs
+```
+
+### If `API_KEY` is enabled
+Add header to every request:
+```bash
+curl.exe -H "X-API-Key: <your_key>" http://localhost:8000/emulators/templates
+```
+
+## 7) Data storage details
+
+- PostgreSQL table: `meter_profiles`
+- MongoDB collections:
+  - `fingerprints`
+  - `discovery_logs`
+
+If DB connections fail, the backend falls back to in-memory behavior for some components.
+
+## 8) Typical demo flow
+
+1. Start stack (`docker compose up --build`).
+2. Open `/docs` and verify backend health.
+3. Create one instance from a template.
+4. Generate fingerprint and profile for that meter.
+5. Open frontend and show summary cards updating.
+6. Optionally inspect DB contents directly via Mongo/Postgres clients.
+
+## 9) Troubleshooting checklist
+
+- Frontend loads but no data:
+  - Check `VITE_API_URL` points to backend.
+  - If `API_KEY` is set, also set `VITE_API_KEY`.
+- `meter_not_found` errors:
+  - Create an instance first and use its actual `meter_id`.
+- PowerShell errors with `-X/-H/-d`:
+  - Use `curl.exe`, not `curl` alias.
+- Backend starts but DB data missing:
+  - Verify Postgres/Mongo containers are healthy and env vars are correct.
 
 ## License
 

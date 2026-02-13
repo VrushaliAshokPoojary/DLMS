@@ -1,28 +1,18 @@
 function buildHeaders(apiKey) {
-  const headers = {
-    'Content-Type': 'application/json',
+  if (!apiKey) {
+    return undefined
   }
-  if (apiKey) {
-    headers['X-API-Key'] = apiKey
+  return {
+    'X-API-Key': apiKey,
   }
-  return headers
-}
-
-async function toJson(response) {
-  const text = await response.text()
-  const data = text ? JSON.parse(text) : {}
-  if (!response.ok) {
-    throw new Error(data.detail || data.error || `HTTP ${response.status}`)
-  }
-  return data
 }
 
 export async function fetchSummary(apiUrl, apiKey) {
   const headers = buildHeaders(apiKey)
   const [templates, instances, profiles] = await Promise.all([
-    fetch(`${apiUrl}/emulators/templates`, { headers }).then(toJson),
-    fetch(`${apiUrl}/emulators/instances`, { headers }).then(toJson),
-    fetch(`${apiUrl}/profiles`, { headers }).then(toJson),
+    fetch(`${apiUrl}/emulators/templates`, { headers }).then((res) => res.json()),
+    fetch(`${apiUrl}/emulators/instances`, { headers }).then((res) => res.json()),
+    fetch(`${apiUrl}/profiles`, { headers }).then((res) => res.json()),
   ])
 
   return {

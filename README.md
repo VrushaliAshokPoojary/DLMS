@@ -82,7 +82,7 @@ cp .env.example .env
    - `SEED_SAMPLE_DATA=true`
 3. Start all services:
    ```bash
-   docker compose up --build
+   make up
    ```
 4. Open:
    - Frontend: `http://localhost:5173`
@@ -182,3 +182,9 @@ If DB connections fail, the backend falls back to in-memory behavior for some co
 ## License
 
 MIT
+
+## 👨‍💻 Author
+
+Vrushali A Poojary
+
+Software Engineering | AIML | DLMS/COSEM 

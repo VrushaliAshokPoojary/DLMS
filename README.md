@@ -32,11 +32,12 @@ backend (FastAPI)
    - To require an API key for backend access, set `API_KEY` in `.env` and also set `VITE_API_KEY` so the frontend can send the header.
    - To seed sample data on startup (useful for the dashboard), set `SEED_SAMPLE_DATA=true`.
    - To switch Postgres drivers, set `POSTGRES_DRIVER` (default: `psycopg`).
-3. Start the stack:
+3. Start the full platform with a single command:
    ```bash
-   docker compose up --build
+   make up
    ```
-4. Open the UI at `http://localhost:5173`.
+   (or `docker compose up --build` if Make is unavailable)
+4. Open the UI at `http://localhost:5173` for the guided workflow dashboard.
 
 ## Local Development
 
@@ -57,6 +58,7 @@ If `API_KEY` is set in the environment, the API requires the `X-API-Key` header 
 To enable real DLMS protocol operations (AARQ/AARE, OBIS extraction), set `DLMS_ADAPTER_URL` to a Gurux/OpenMUC adapter service that exposes:
 - `POST /associate` (returns `status`, `authentication`, `security_suite`, `aarq`, `aare`)
 - `POST /obis` (returns `normalized` OBIS mappings)
+- `POST /association-objects` (returns `objects` list)
 - `GET /health`
 
 ### Frontend
@@ -99,10 +101,13 @@ curl.exe -X POST http://localhost:8000/profiles/<meter_id>
 🔹 6. Perform DLMS Association (AARQ / AARE)
 curl.exe -X POST http://localhost:8000/associations/<meter_id>
 
-🔹 7. Normalize OBIS Codes
+🔹 7. Extract Association Object List
+curl.exe http://localhost:8000/associations/objects/<meter_id>
+
+🔹 8. Normalize OBIS Codes
 curl.exe http://localhost:8000/obis/normalize/<meter_id>
 
-🔹 8. Classify Vendor
+🔹 9. Classify Vendor
 curl.exe http://localhost:8000/vendors/classify/<meter_id>
 
 ## Project Structure

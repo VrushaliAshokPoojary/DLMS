@@ -87,10 +87,3 @@ class ProfileRepository:
             ]
         except SQLAlchemyError:
             return list(self._profiles.values())
-
-
-    def store(self, profile: MeterProfile) -> None:
-        self._profiles[profile.profile_id] = profile
-
-    def list(self) -> list[MeterProfile]:
-        return list(self._profiles.values())

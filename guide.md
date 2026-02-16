@@ -184,10 +184,46 @@ curl "http://localhost:8000/obis/normalize/<METER_ID>"
 curl "http://localhost:8000/vendors/classify/<METER_ID>"
 ```
 
-## E. Gurux/OpenMUC + Wireshark note
-- Repository currently integrates real stack via **adapter URL** (`DLMS_ADAPTER_URL`).
-- Gurux/OpenMUC execution commands are adapter-specific and are **not implemented in this repository tree**.
-- Practical approach: run adapter as a separate service and point backend to it; then use Wireshark on adapter traffic path for packet-level validation.
+## E. Real adapter onboarding (`DLMS_ADAPTER_URL`) — exact operator steps
+1. Start your protocol adapter service (Gurux/OpenMUC based) on a reachable address and port (example: `0.0.0.0:9000`).
+2. Verify adapter directly:
+   ```bash
+   curl http://localhost:9000/health
+   ```
+3. Set project environment:
+   ```bash
+   cp .env.example .env
+   ```
+4. Put adapter URL in `.env`:
+   ```dotenv
+   DLMS_ADAPTER_URL=http://host.docker.internal:9000
+   ```
+   - If adapter is another compose service, use service DNS name: `http://dlms-adapter:9000`.
+5. Restart backend with new env:
+   ```bash
+   make down
+   make up
+   ```
+6. Confirm backend-adapter connectivity:
+   ```bash
+   curl http://localhost:8000/dlms/adapter/health
+   ```
+7. Create or pick an emulator meter and capture `meter_id`.
+8. Execute protocol-true endpoints through backend:
+   ```bash
+   curl -X POST "http://localhost:8000/associations/<METER_ID>"
+   curl "http://localhost:8000/associations/objects/<METER_ID>"
+   curl "http://localhost:8000/obis/normalize/<METER_ID>"
+   ```
+9. Validate payload origin: response structure/content should match adapter implementation (not simulated fallback strings).
+10. If needed, run packet capture on adapter path:
+    - start Wireshark/tcpdump on adapter host interface and filter by adapter port (e.g., `tcp.port == 9000`).
+
+### Adapter troubleshooting quick matrix
+- `/dlms/adapter/health` returns `disabled` → `DLMS_ADAPTER_URL` not set or backend not restarted.
+- Timeout/refused → adapter process down, wrong host/port, or bind address issue.
+- Docker hostname issue → use `host.docker.internal` (host service) or compose service name (container service).
+- TLS error → switch to `https://` and ensure backend container trusts cert chain.
 
 ---
 

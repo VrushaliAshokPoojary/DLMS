@@ -205,6 +205,74 @@ If `API_KEY` is enabled, add:
 - **Profile export endpoint**: `GET /profiles/{meter_id}/export`
 - **Improved API errors** for missing meters/profiles (`404` behavior)
 
+
+## 11) Configure and run real DLMS adapter (`DLMS_ADAPTER_URL`) — step by step
+
+This project can run in two modes:
+- **Simulation mode** (default): backend generates simulated handshake/object results.
+- **Adapter mode**: backend forwards protocol operations to an external DLMS adapter service.
+
+### What URL to use
+Set `DLMS_ADAPTER_URL` to the adapter base URL that exposes these endpoints:
+- `GET /health`
+- `POST /associate`
+- `POST /association-objects`
+- `POST /obis`
+
+Example values:
+- Adapter running on your host: `DLMS_ADAPTER_URL=http://host.docker.internal:9000`
+- Adapter running as another compose service: `DLMS_ADAPTER_URL=http://dlms-adapter:9000`
+- Adapter running remotely: `DLMS_ADAPTER_URL=https://adapter.example.com`
+
+### Exact steps
+1. **Run your adapter service** so it listens on a reachable host/port (for example `0.0.0.0:9000`).
+2. **Check adapter health directly**:
+   ```bash
+   curl http://localhost:9000/health
+   ```
+3. **Open project env**:
+   ```bash
+   cp .env.example .env
+   ```
+4. **Set adapter URL in `.env`**:
+   ```dotenv
+   DLMS_ADAPTER_URL=http://host.docker.internal:9000
+   ```
+5. **Restart stack so backend picks new env**:
+   ```bash
+   make down
+   make up
+   ```
+6. **Confirm backend can see adapter**:
+   ```bash
+   curl http://localhost:8000/dlms/adapter/health
+   ```
+7. **Create one meter instance**:
+   ```bash
+   curl -X POST "http://localhost:8000/emulators/instances?vendor=Acme%20Energy&model=A1000&ip_address=127.0.0.1&port=4059"
+   ```
+8. **Run adapter-backed protocol endpoints** (replace `<METER_ID>`):
+   ```bash
+   curl -X POST "http://localhost:8000/associations/<METER_ID>"
+   curl "http://localhost:8000/associations/objects/<METER_ID>"
+   curl "http://localhost:8000/obis/normalize/<METER_ID>"
+   ```
+9. **Verify response is adapter-driven** by checking fields/content expected from your adapter.
+10. **If auth is enabled**, include API key in every backend call:
+    ```bash
+    curl -H "X-API-Key: <your_key>" http://localhost:8000/dlms/adapter/health
+    ```
+
+### Troubleshooting adapter connectivity
+- `{"status":"disabled"}` from `/dlms/adapter/health`:
+  - `DLMS_ADAPTER_URL` is empty or not loaded; restart backend.
+- Connection timeout/refused:
+  - adapter not running, wrong port, or not bound to `0.0.0.0`.
+- Using Docker and adapter on host machine:
+  - prefer `host.docker.internal` instead of `localhost`.
+- TLS adapters:
+  - use `https://...` URL and ensure cert chain is valid from backend container.
+
 ## License
 MIT
 

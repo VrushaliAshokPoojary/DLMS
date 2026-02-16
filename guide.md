@@ -1,315 +1,342 @@
-# Project Completion Mentor Manual (Repository-Based, SRS-Aligned)
+# Software-Defined Universal DLMS Auto-Discovery & Fingerprinting Platform
+## Repository Analysis & Technical Defense Guide (SRS-aligned)
 
-## 1) Copy-paste prompt for ChatGPT (clear and structured)
+This guide analyzes the current repository implementation against your provided SRS and gives a presentation-ready technical reference.
 
-Use the prompt below whenever you want ChatGPT to act as your project-completion mentor.
+---
 
-```text
-You are my Project Completion Mentor for this repository:
-Software-Defined Universal DLMS Auto-Discovery & Fingerprinting Platform.
+## 1) Achievements vs Not Achieved Tasks (FR-1 to FR-15)
 
-Your job:
-1) Analyze my repository against this SRS and tell me exactly:
-   - What is achieved
-   - What is partially achieved
-   - What is not achieved
-   - Why each item is in that status
-   - How achieved items are implemented in my code
-2) Explain complete project working end-to-end:
-   - Module flow
-   - Data flow
-   - Request/response flow
-   - Storage flow (what goes to PostgreSQL vs MongoDB)
-3) Provide execution guide:
-   - Environment setup
-   - Startup commands
-   - API validation commands
-   - DB verification commands
-   - Troubleshooting and recovery checklist
-4) Provide defense/presentation package:
-   - 8-10 minute presentation script
-   - Demo script with exact commands
-   - Acceptance-criteria mapping with proof points
-5) Provide viva/interviewer prep:
-   - Likely questions and strong answers
-   - Follow-up technical cross-questions
-   - Risks/limitations and how to justify them
-6) Produce output in Markdown with:
-   - FR-wise status table (FR-1 to FR-15)
-   - NFR-wise status table
-   - Prioritized action plan (P0/P1/P2)
-   - A final “what to build next in 7 days” plan
+> Interpretation rule used: status is based on **current repository behavior**. If behavior is simulated and end-to-end callable via API, it is marked **ACHIEVED (Prototype)**. If a production-grade requirement is absent (for example true cryptographic DLMS stack), it is marked **NOT ACHIEVED (Production Depth)**.
 
-Constraints:
-- Be repository-evidence driven. Do not assume features not present in code.
-- Distinguish simulation behavior vs real DLMS protocol behavior.
-- Mention production gaps honestly.
-- Keep language student-friendly and defense-ready.
+| FR | Requirement | Status | How/Why (Repository Evidence) |
+|---|---|---|---|
+| FR-1 | Emulate DLMS meters with configurable vendor templates | **ACHIEVED (Prototype)** | `EmulatorRegistry` supports template registry + runtime template creation + instance creation. Default templates are seeded and API endpoints expose template and instance lifecycle. |
+| FR-2 | Simulate LN and SN referencing meters | **ACHIEVED (Prototype)** | Templates include `referencing: "LN"` and `"SN"`; model enforces `Literal["LN","SN"]`. |
+| FR-3 | Expose configurable OBIS object lists | **ACHIEVED (Prototype)** | Template schema includes `obis_objects`; runtime template API accepts OBIS list and instances carry OBIS list. |
+| FR-4 | Scan IP ranges for DLMS endpoints | **ACHIEVED (Prototype)** | Discovery expands CIDR targets and probes each host/port via thread pool. |
+| FR-5 | Detect DLMS communication ports | **ACHIEVED (Prototype)** | Discovery uses socket connect to determine reachable ports and returns discovered endpoints. |
+| FR-6 | Perform association handshake (AARQ/AARE) | **ACHIEVED (Simulated) / NOT ACHIEVED (Native protocol)** | Local negotiator builds synthetic AARQ/AARE strings; true protocol can only come via external adapter (`DLMS_ADAPTER_URL`). |
+| FR-7 | Detect auth modes (None, LLS, HLS) | **ACHIEVED (Template-derived) / NOT ACHIEVED (Protocol-negotiated)** | Auth mode is selected from template during instance creation and returned by association/classification flows; no native wire-level negotiation engine exists. |
+| FR-8 | Identify security suites (0/1/2) | **ACHIEVED (Template-derived) / NOT ACHIEVED (Protocol-negotiated)** | Security suite is template-derived and surfaced via APIs; native cryptographic negotiation is not implemented in backend core. |
+| FR-9 | Extract association object lists | **ACHIEVED (Prototype)** | Object list endpoint returns meter OBIS codes from simulator, or adapter output when configured. |
+| FR-10 | Normalize OBIS mappings | **ACHIEVED (Prototype)** | OBIS normalizer endpoint exists and returns normalized map from local rules or adapter data path. |
+| FR-11 | Generate vendor protocol fingerprints | **ACHIEVED (Prototype)** | Fingerprint engine builds `vendor_signature` + features and stores in Mongo (or memory fallback). |
+| FR-12 | Classify meter manufacturer | **ACHIEVED (Prototype)** | Static signature-based classifier maps vendors to labels/confidence. |
+| FR-13 | Generate meter configuration profiles | **ACHIEVED (Prototype)** | Profile generator builds profile + stores in PostgreSQL `meter_profiles`; export endpoint wraps profile with schema version metadata. |
+| FR-14 | Expose REST APIs for integration | **ACHIEVED** | FastAPI exposes health/summary/emulator/discovery/fingerprint/profile/association/OBIS/vendor endpoints. |
+| FR-15 | Support bulk discovery operations | **ACHIEVED (Prototype)** | CIDR range scanning + concurrency + retries in discovery engine; bulk instance provisioning also exists (`/emulators/instances/bulk`). |
+
+### Practical reason for gaps
+Requirements FR-6/7/8 in strict utility-grade form require a full DLMS protocol stack (secure associations, key management, APDU parsing, ciphered traffic handling). This repository deliberately keeps backend core lightweight and supports real stack integration through `DLMS_ADAPTER_URL` instead.
+
+---
+
+## 2) Complete End-to-End Working Explanation
+
+### A. Virtual meter creation lifecycle
+1. On startup, default templates are seeded (`Acme Energy A1000`, `Zenith Power Z900`).
+2. User lists templates or creates new templates through API.
+3. User creates single or bulk instances.
+4. Instance inherits template auth mode/security suite/OBIS objects and receives generated `meter_id`.
+
+### B. Discovery lifecycle
+1. Client sends `DiscoveryRequest` with `ip_range`, `ports`, `timeout_seconds`, `retries`, `max_concurrency`.
+2. Engine expands CIDR into host:port targets.
+3. Thread pool probes each target using socket connection.
+4. For reachable target:
+   - If matched to known emulator instance → enriched result (vendor/model/auth/suite).
+   - Else → generic reachable endpoint record.
+5. Discovery scan metadata is logged (MongoDB or memory fallback).
+
+### C. Association (AARQ/AARE) lifecycle
+1. Client calls `POST /associations/{meter_id}`.
+2. If `DLMS_ADAPTER_URL` configured → backend forwards to adapter `/associate`.
+3. Else simulator returns synthetic AARQ/AARE report based on meter authentication/suite.
+
+### D. Auth + security suite detection logic
+- In current repository, auth/suite are **meter-template-derived attributes** attached at instance creation.
+- They are surfaced in association reports and other outputs.
+- With external adapter enabled, these can represent protocol-derived values from real DLMS communication.
+
+### E. OBIS extraction + normalization lifecycle
+1. `GET /associations/objects/{meter_id}` returns association object list from simulator (OBIS codes) or adapter.
+2. `GET /obis/normalize/{meter_id}` returns normalized OBIS dictionary from local module or adapter.
+
+### F. Fingerprinting + vendor classification lifecycle
+1. Fingerprinting engine creates vendor signature: `vendor:model:auth:suite`.
+2. Feature map is generated (`referencing`, `obis_count`).
+3. Vendor classifier applies signature rules and confidence scoring.
+4. Fingerprint record stored in MongoDB `fingerprints` (fallback memory).
+
+### G. Meter profile generation + integration API lifecycle
+1. `POST /profiles/{meter_id}` builds profile (`profile_id`, meter identity, `obis_map`).
+2. Repository stores profile in PostgreSQL table `meter_profiles`.
+3. `GET /profiles/{meter_id}/export` exposes schema-versioned export contract for HES/MDMS integration.
+
+---
+
+## 3) Data Flow & Storage Architecture
+
+## Data generated by stage
+- **Emulator stage**: templates, instances, auth mode, suite, OBIS catalog.
+- **Discovery stage**: scan request metadata, discovered endpoints, reachability.
+- **Association stage**: association status, AARQ/AARE payload summary.
+- **Fingerprinting stage**: vendor signature, feature map, classification label.
+- **Profile stage**: normalized profile payload for integration.
+
+## Storage mapping
+- **PostgreSQL**
+  - Table: `meter_profiles`
+  - Stores profile records (`profile_id`, `meter_id`, vendor/model, `obis_map`, timestamp).
+- **MongoDB**
+  - Collection: `fingerprints`
+  - Collection: `discovery_logs`
+- **Memory fallback**
+  - Used automatically if DB unavailable (both discovery and fingerprint/profile paths include fallback behavior).
+
+## How logs/OBIS/signatures are organized
+- Discovery logs are structured as `DiscoveryLog` model (scan id, range, ports, target/discovered counts, timing).
+- OBIS mappings are represented as dictionary maps in profile and normalization responses.
+- Vendor signatures are simple concatenated identifiers plus low-dimensional feature map.
+
+## Verification commands
+```bash
+# API checks
+curl http://localhost:8000/health
+curl http://localhost:8000/summary
+curl http://localhost:8000/discovery/logs
+curl http://localhost:8000/fingerprints
+curl http://localhost:8000/profiles
+
+# PostgreSQL proof
+docker compose exec postgres psql -U dlms -d dlms -c "SELECT profile_id,meter_id,vendor,model,created_at FROM meter_profiles ORDER BY created_at DESC LIMIT 10;"
+
+# MongoDB proof
+docker compose exec mongo mongosh --eval "use dlms; db.fingerprints.find({}, {_id:0}).limit(5).pretty(); db.discovery_logs.find({}, {_id:0}).limit(5).pretty();"
 ```
 
 ---
 
-## 2) Repository reality check (current status)
+## 4) System Execution Guidelines (Step-by-step)
 
-This repository is a **working prototype** with complete API skeleton and partial SRS fulfillment. It demonstrates end-to-end simulation flows (emulator → discovery → association → OBIS → fingerprint → profile), but full production-grade DLMS interoperability and large-scale validation are still pending.
-
-### What is strong right now
-- Full backend API surface for all major workflows.
-- Virtual meter template/instance flow is operational.
-- Discovery engine supports CIDR expansion + port probing + concurrency.
-- Fingerprint generation, vendor classification, profile generation exist and persist to DB when available.
-- Frontend gives a one-screen operational demo workflow.
-- Optional adapter integration point exists for real protocol operations.
-
-### What is still incomplete for full SRS compliance
-- Native real DLMS AARQ/AARE and association object extraction are not implemented in backend core (simulated unless external adapter is connected).
-- Vendor classification is static-rule based (no evaluation dataset or ML pipeline).
-- Dashboard does not yet provide full operational pages for discovery logs, profile export, and deep observability.
-- No repository evidence of 10,000-meter benchmark execution and acceptance proof artifacts.
-
----
-
-## 3) FR-wise completion matrix (FR-1 to FR-15)
-
-| FR | Requirement | Status | How it is achieved now | Why not fully achieved yet |
-|---|---|---|---|---|
-| FR-1 | Emulate DLMS meters with configurable vendor templates | **Achieved (prototype)** | Templates are seeded and instances are created from template attributes. | Templates are code-seeded; no persistent CRUD UI/API for template governance. |
-| FR-2 | Simulate LN and SN referencing meters | **Achieved (prototype)** | Templates include both LN and SN types. | Behavior is template-level simulation, not full protocol semantic differentiation. |
-| FR-3 | Expose configurable OBIS object lists | **Achieved (prototype)** | Template OBIS object lists are attached to instances and used in workflows. | No persistent OBIS catalog management lifecycle. |
-| FR-4 | Scan IP ranges for DLMS endpoints | **Achieved (prototype)** | Discovery supports CIDR expansion and scans host/port targets. | Discovery validity under large real networks not benchmarked in repo. |
-| FR-5 | Detect DLMS communication ports | **Achieved (prototype)** | Socket probing marks reachable endpoints per port. | Reachable port ≠ guaranteed real DLMS endpoint identity. |
-| FR-6 | Perform association handshake (AARQ/AARE) | **Partial** | Simulated AARQ/AARE returned; adapter path can delegate to external service. | Native DLMS stack absent; real handshake depends on external adapter. |
-| FR-7 | Detect auth modes (None, LLS, HLS) | **Partial** | Auth mode is available in templates/instances and reported in association output. | True protocol-negotiated detection requires adapter/real stack. |
-| FR-8 | Identify security suites (0/1/2) | **Partial** | Suite values are template-derived and reported. | Real suite negotiation/verification not natively implemented. |
-| FR-9 | Extract association object lists | **Partial** | Simulated from meter OBIS list or delegated to adapter endpoint. | Native protocol object-list extraction is pending. |
-| FR-10 | Normalize OBIS mappings | **Achieved (prototype)** | OBIS normalizer maps known codes and fallback-transforms unknowns. | Mapping governance/versioning and wide vendor coverage are limited. |
-| FR-11 | Generate vendor protocol fingerprints | **Achieved (prototype)** | Fingerprint signature + features generated and stored in Mongo (or memory fallback). | Feature richness and benchmark quality need improvement. |
-| FR-12 | Classify meter manufacturer | **Achieved (prototype)** | Rule-based classifier returns label + confidence. | Static signatures only; no measured classification pipeline. |
-| FR-13 | Generate meter configuration profiles | **Achieved (prototype)** | Profile generated from meter data and stored in PostgreSQL. | Export contracts/versioning for HES/MDMS are basic. |
-| FR-14 | Expose REST APIs for integration | **Achieved (prototype)** | FastAPI endpoints cover health, emulators, discovery, fingerprints, profiles, association, OBIS, vendor. | API versioning and stronger enterprise contract hardening are pending. |
-| FR-15 | Support bulk discovery operations | **Partial** | Discovery supports concurrent scanning and configurable concurrency. | No repository evidence of successful bulk/10k discovery acceptance runs. |
-
----
-
-## 4) NFR status
-
-| NFR Area | Target | Status | Notes |
-|---|---|---|---|
-| Performance | ≤60s discovery per meter, large-scale operation | **Partial** | Concurrency exists, but no benchmark artifacts committed. |
-| Scalability | Support ≥10,000 virtual meters | **Partial** | Architecture is containerized and scalable in design; proof runs absent. |
-| Security | TLS 1.2+, RBAC | **Partial** | API key support exists; RBAC and full TLS termination strategy not fully implemented in-app. |
-| Reliability | Retry and fault tolerance | **Partial** | Discovery has retry; DB fallback to memory exists; broader resiliency testing not documented. |
-
----
-
-## 5) Complete project working (end-to-end process)
-
-## A. Startup and initialization
-1. Backend boots and seeds default meter templates in memory.
-2. Optional sample data can be seeded based on env flag.
-3. DB connectors initialize:
-   - PostgreSQL for `meter_profiles`
-   - MongoDB for `fingerprints` and `discovery_logs`
-4. If DB unavailable, services continue with in-memory fallback.
-
-## B. Virtual meter lifecycle
-1. Client calls template list endpoint.
-2. Client creates an instance by vendor+model+IP+port.
-3. Backend resolves template and creates a unique `meter_id`.
-4. Instance holds selected auth/security/OBIS configuration.
-
-## C. Discovery lifecycle
-1. Client posts CIDR + ports + concurrency + timeout + retries.
-2. Engine expands CIDR into host targets.
-3. Thread pool probes each host:port.
-4. For reachable endpoints:
-   - If matching emulator instance exists: returns enriched meter metadata.
-   - Else: returns generic reachable endpoint record.
-5. Scan log is persisted to MongoDB (`discovery_logs`) or in-memory list.
-
-## D. Association / auth / security lifecycle
-1. Client requests association for a meter.
-2. If adapter URL configured:
-   - Backend forwards request to adapter `/associate`.
-   - Adapter response becomes association report.
-3. Else simulated mode:
-   - Backend constructs synthetic AARQ/AARE strings from meter attributes.
-
-## E. OBIS extraction and normalization lifecycle
-1. Client requests association object list:
-   - Adapter path (`/association-objects`) OR simulated from meter OBIS list.
-2. Client requests OBIS normalization:
-   - Adapter path (`/obis`) OR local normalization map/fallback transform.
-
-## F. Fingerprinting and vendor classification lifecycle
-1. Fingerprint engine creates a vendor signature from meter attributes.
-2. Features are generated (e.g., referencing heuristic, OBIS count).
-3. Classifier maps vendor to label/confidence.
-4. Fingerprint record stored in MongoDB (`fingerprints`) or in memory.
-
-## G. Profile generation lifecycle
-1. Profile generator creates `profile_id`, core metadata, and OBIS map.
-2. Repository stores profile in PostgreSQL `meter_profiles` table.
-3. Listing endpoint reads profiles from DB (fallback: in-memory cache).
-
-## H. Frontend workflow
-1. On load, frontend fetches summary counts.
-2. User creates meter instance via UI form.
-3. User runs workflow button to trigger sequence:
-   - fingerprint → profile → association → association objects → OBIS normalize → vendor classify
-4. UI displays JSON output and updated summary.
-
----
-
-## 6) Data collection and storage (what, where, how to verify)
-
-## Data collected
-- Meter templates and runtime instances.
-- Discovery scan logs and discovered endpoint results.
-- Fingerprint signatures + feature maps + classification labels.
-- Meter profiles (integration-oriented output).
-
-## Data storage locations
-- **PostgreSQL**: `meter_profiles` table.
-- **MongoDB**: `fingerprints`, `discovery_logs` collections.
-- **Memory fallback**: used when DB connection is unavailable.
-
-## Verification commands
+## A. Environment setup
 ```bash
-# 1) API checks
-curl http://localhost:8000/health
-curl http://localhost:8000/emulators/templates
+cp .env.example .env
+```
+Recommended demo values:
+- `API_KEY=`
+- `SEED_SAMPLE_DATA=true`
+- `VITE_API_URL=http://localhost:8000`
+
+## B. Docker run (recommended)
+```bash
+make up
+# or
+docker compose up --build
+```
+Endpoints:
+- Frontend: `http://localhost:5173`
+- Backend Swagger: `http://localhost:8000/docs`
+- Nginx: `http://localhost:8080`
+
+Lifecycle:
+```bash
+make ps
+make logs
+make down
+```
+
+## C. Local run (without Docker)
+### Backend
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+Use local DB hosts when outside Compose:
+- `POSTGRES_HOST=localhost`
+- `MONGO_URL=mongodb://localhost:27017`
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+## D. Validate emulator + discovery + profiling
+```bash
+# 1) Create meter
 curl -X POST "http://localhost:8000/emulators/instances?vendor=Acme%20Energy&model=A1000&ip_address=127.0.0.1&port=4059"
 
-# 2) Discovery + logs
-curl -X POST "http://localhost:8000/discovery/scan" \
-  -H "Content-Type: application/json" \
-  -d '{"ip_range":"127.0.0.0/30","ports":[4059],"max_concurrency":20}'
-curl http://localhost:8000/discovery/logs
+# 2) Discovery
+curl -X POST "http://localhost:8000/discovery/scan" -H "Content-Type: application/json" -d '{"ip_range":"127.0.0.0/30","ports":[4059],"timeout_seconds":0.5,"max_concurrency":20,"retries":1}'
 
-# 3) End-to-end for one meter id
+# 3) Full protocol workflow
 curl -X POST "http://localhost:8000/fingerprints/<METER_ID>"
 curl -X POST "http://localhost:8000/profiles/<METER_ID>"
 curl -X POST "http://localhost:8000/associations/<METER_ID>"
 curl "http://localhost:8000/associations/objects/<METER_ID>"
 curl "http://localhost:8000/obis/normalize/<METER_ID>"
 curl "http://localhost:8000/vendors/classify/<METER_ID>"
-
-# 4) DB proof (docker compose runtime)
-docker compose exec postgres psql -U dlms -d dlms -c "SELECT profile_id,meter_id,vendor,model,created_at FROM meter_profiles ORDER BY created_at DESC LIMIT 10;"
-docker compose exec mongo mongosh --eval "use dlms; db.fingerprints.find({}, {_id:0}).limit(5).pretty(); db.discovery_logs.find({}, {_id:0}).limit(5).pretty();"
 ```
 
----
+## E. Real adapter onboarding (`DLMS_ADAPTER_URL`) — exact operator steps
+1. Start your protocol adapter service (Gurux/OpenMUC based) on a reachable address and port (example: `0.0.0.0:9000`).
+2. Verify adapter directly:
+   ```bash
+   curl http://localhost:9000/health
+   ```
+3. Set project environment:
+   ```bash
+   cp .env.example .env
+   ```
+4. Put adapter URL in `.env`:
+   ```dotenv
+   DLMS_ADAPTER_URL=http://host.docker.internal:9000
+   ```
+   - If adapter is another compose service, use service DNS name: `http://dlms-adapter:9000`.
+5. Restart backend with new env:
+   ```bash
+   make down
+   make up
+   ```
+6. Confirm backend-adapter connectivity:
+   ```bash
+   curl http://localhost:8000/dlms/adapter/health
+   ```
+7. Create or pick an emulator meter and capture `meter_id`.
+8. Execute protocol-true endpoints through backend:
+   ```bash
+   curl -X POST "http://localhost:8000/associations/<METER_ID>"
+   curl "http://localhost:8000/associations/objects/<METER_ID>"
+   curl "http://localhost:8000/obis/normalize/<METER_ID>"
+   ```
+9. Validate payload origin: response structure/content should match adapter implementation (not simulated fallback strings).
+10. If needed, run packet capture on adapter path:
+    - start Wireshark/tcpdump on adapter host interface and filter by adapter port (e.g., `tcp.port == 9000`).
 
-## 7) Execution guidelines (defense-safe order)
-
-1. `cp .env.example .env`
-2. `docker compose up --build`
-3. Confirm backend docs: `http://localhost:8000/docs`
-4. Confirm frontend: `http://localhost:5173`
-5. Create 2–3 sample instances before presentation.
-6. Run one discovery and one full workflow to populate DBs.
-7. Keep DB proof commands ready to show persistence.
-8. Keep fallback screenshots/video in case live network scan is noisy.
-
----
-
-## 8) Presentation script (8-10 minutes)
-
-### Slide 1 — Problem
-“Utilities need a faster way to onboard heterogeneous DLMS meters. Physical-lab-only testing is costly and slow.”
-
-### Slide 2 — Solution
-“This project provides a software-defined DLMS discovery and fingerprinting platform with virtual meters, protocol workflow simulation, and integration APIs.”
-
-### Slide 3 — Architecture
-“Frontend dashboard calls FastAPI backend. Backend orchestrates emulation, discovery, association, OBIS normalization, fingerprinting, and profile generation. PostgreSQL stores profiles; MongoDB stores logs/fingerprints.”
-
-### Slide 4 — Live Flow
-“First I create a virtual meter. Then I run discovery and full workflow. Finally I prove persistence via SQL/Mongo queries.”
-
-### Slide 5 — SRS mapping
-“Most FRs are achieved at prototype level. Real protocol depth (native handshake extraction) and large-scale benchmark evidence remain partial.”
-
-### Slide 6 — Key achievements
-- End-to-end workflow in one platform.
-- Polyglot persistence and fallback resilience.
-- Adapter-ready path for real DLMS integration.
-
-### Slide 7 — Limitations (honest)
-- Native real DLMS stack not embedded.
-- Vendor classifier is rule-based.
-- 10k benchmark evidence not yet committed.
-
-### Slide 8 — Next milestones
-- Adapter rollout + true protocol extraction.
-- Dataset-driven classifier evaluation.
-- Automated load test reports.
-
-### Slide 9 — Conclusion
-“This repository is a strong, demo-ready prototype and a practical base to reach full SRS compliance with focused Phase-2 engineering.”
+### Adapter troubleshooting quick matrix
+- `/dlms/adapter/health` returns `disabled` → `DLMS_ADAPTER_URL` not set or backend not restarted.
+- Timeout/refused → adapter process down, wrong host/port, or bind address issue.
+- Docker hostname issue → use `host.docker.internal` (host service) or compose service name (container service).
+- TLS error → switch to `https://` and ensure backend container trusts cert chain.
 
 ---
 
-## 9) Interviewer/viva questions with strong answers
+## 5) Presentation Script (Technical Defense Ready)
 
-### Q1) Is this real DLMS or simulation?
-**Answer:** Both modes exist. Core backend supports simulation by design, and real protocol behavior is enabled through an external adapter integration path. This architecture reduces coupling and keeps protocol complexity isolated.
+## Slide 1 — Problem
+Utility onboarding of heterogeneous DLMS meters is slow and hardware-dependent. Physical-lab-only validation limits scale and repeatability.
 
-### Q2) Why use PostgreSQL and MongoDB together?
-**Answer:** Profiles are structured, relational, and integration-centric, so PostgreSQL is suitable. Discovery/fingerprint logs are semi-structured and append-heavy, so MongoDB is a practical fit.
+## Slide 2 — Solution
+We built a software-defined DLMS interoperability lab that simulates meters, auto-discovers endpoints, fingerprints protocol behavior, normalizes OBIS data, and exports meter profiles through REST APIs.
 
-### Q3) How do you handle DB outages?
-**Answer:** Services fail gracefully to in-memory storage so demo and workflows remain functional; persistence consistency is reduced during outage but operational continuity is preserved.
+## Slide 3 — Architecture
+React dashboard drives FastAPI orchestrator. Backend integrates PostgreSQL for durable profiles and MongoDB for discovery/fingerprint telemetry. Optional external DLMS adapter provides real protocol-depth operations.
 
-### Q4) How is vendor classification done?
-**Answer:** Current classifier uses deterministic signature mapping for explainability and quick prototyping. Next step is feature expansion and dataset-backed evaluation.
+## Slide 4 — Core modules
+1. Emulator engine
+2. Discovery engine
+3. Association/auth negotiator
+4. OBIS normalization
+5. Fingerprinting + classification
+6. Profile generator + export API
 
-### Q5) What proves discovery works?
-**Answer:** CIDR scan response, discovery log records, and optional endpoint-to-instance resolution show discovery behavior; bulk-scale SLA proof requires additional benchmark artifacts.
+## Slide 5 — Demo flow
+Create virtual meter → scan network range → run association + object list + OBIS normalization → generate fingerprint/classification → persist profile → verify data in SQL/Mongo.
 
-### Q6) What are your top technical debts?
-**Answer:** Native DLMS handshake/object extraction, benchmark automation at 10k scale, and enterprise hardening (RBAC, versioned contracts).
+## Slide 6 — Results
+- Full API-driven prototype is operational.
+- Polyglot persistence and graceful fallback improve resilience.
+- Bulk simulation + concurrent discovery support scale-oriented testing.
 
-### Q7) If this were deployed in utility production, what changes first?
-**Answer:** Security hardening (TLS/RBAC/secrets), adapter HA deployment, observability stack, and formal load/reliability gates in CI/CD.
+## Slide 7 — Limitations
+- Native DLMS cryptographic handshake parsing is adapter-dependent.
+- Vendor classification is static-rule based.
+- Repository lacks benchmark artifacts proving 10k-meter acceptance criteria.
 
----
-
-## 10) Why achievements were possible and why some items are pending
-
-## Why achieved items succeeded
-- Clear modular service design made incremental feature delivery easy.
-- Strong API-first backend allowed frontend and automation in parallel.
-- Fallback persistence design kept workflows operable in varied environments.
-
-## Why pending items are still pending
-- Real DLMS protocol depth requires specialized adapter engineering and testing hardware/simulators.
-- 10k-scale acceptance requires dedicated load infrastructure and test automation investment.
-- Classifier accuracy claims require curated labeled datasets and evaluation scripts.
+## Slide 8 — Next phase
+Integrate production-grade adapter, build labeled vendor dataset, implement RBAC/TLS hardening, and produce formal performance reports.
 
 ---
 
-## 11) 7-day prioritized completion plan
+## 6) Interview Questions & Suggested Answers
 
-### P0 (must-do)
-1. Add scripted evidence run: end-to-end API + DB proof capture.
-2. Add benchmark script skeleton + baseline results report.
-3. Add API error contract consistency and version prefix (`/api/v1`).
+1. **Q: Is this a real DLMS stack or simulation?**  
+   **A:** Core backend is simulation-first for reproducibility; real protocol depth is enabled through an external adapter using `DLMS_ADAPTER_URL`.
 
-### P1 (high impact)
-1. Integrate and validate DLMS adapter endpoints in staging.
-2. Expand classifier features and generate evaluation report.
-3. Add dashboard pages for logs/fingerprints/profile exports.
+2. **Q: Why both PostgreSQL and MongoDB?**  
+   **A:** Profiles are structured and relational (`meter_profiles`), while discovery/fingerprint logs are document-style telemetry better suited to MongoDB.
 
-### P2 (polish)
-1. Add profile export schema versioning.
-2. Add RBAC/auth middleware beyond static API key.
-3. Add docs for ops runbook and incident handling.
+3. **Q: How is discovery scaled?**  
+   **A:** Discovery expands CIDR ranges and probes with `ThreadPoolExecutor` using configurable concurrency, timeout, and retry controls.
+
+4. **Q: How do you detect auth mode/security suite?**  
+   **A:** In prototype mode they are template-derived. In integration mode adapter responses can provide negotiated values.
+
+5. **Q: How are OBIS objects normalized?**  
+   **A:** Normalization endpoint returns canonical mappings from local normalization logic (or adapter response).
+
+6. **Q: What makes fingerprinting explainable?**  
+   **A:** Signature + explicit feature map (`referencing`, `obis_count`) are returned and stored, making decisions auditable.
+
+7. **Q: How does the system behave when databases fail?**  
+   **A:** It degrades to in-memory storage for key paths, allowing demo continuity while persistence is unavailable.
+
+8. **Q: How is integration to HES/MDMS achieved?**  
+   **A:** REST APIs expose profiles and export payload (`/profiles/{meter_id}/export`) with schema metadata.
 
 ---
 
-## 12) Final mentor verdict
+## 7) Reasons for Success & Limitations
 
-Your project is **defense-ready as a prototype** and demonstrates strong systems thinking. For claiming **full SRS compliance**, you need evidence-based closure on real DLMS protocol depth and scale validation.
+## Why modules perform well (prototype scope)
+- **Strong API contracting** via Pydantic models.
+- **Modular service boundaries** (emulator/discovery/profile/fingerprint/association separated).
+- **Resilience pattern** (DB-first + memory fallback).
+- **Operational simplicity** through Docker Compose and predictable endpoints.
+
+## Limitations
+- No embedded native Gurux/OpenMUC protocol engine in backend core.
+- Static-rule vendor classifier (no ML training pipeline or benchmark dataset).
+- SRS NFR targets (10k performance, 85%+ classification, TLS/RBAC) are not evidenced by committed benchmark/security artifacts.
+
+---
+
+## 8) NFR Reality Check (Repository Evidence)
+
+| NFR Area | SRS Expectation | Current State |
+|---|---|---|
+| Performance | ≤60 sec discovery/meter, 10k virtual meters | Concurrency controls and bulk provisioning exist, but no committed benchmark report proving target. |
+| Security | TLS1.2+, RBAC | Optional API key auth exists; TLS termination/RBAC framework not implemented in app layer. |
+| Scalability | Containerized + horizontal scaling | Dockerized services present; no Kubernetes manifests/autoscaling configs in repo. |
+| Reliability | Retry + fault tolerance | Discovery retries and in-memory fallback implemented; no chaos/failover test artifacts. |
+
+---
+
+## 9) Recommended 7-day action plan (P0/P1/P2)
+
+### P0 (must-have)
+- Connect and validate real adapter (`DLMS_ADAPTER_URL`).
+- Add reproducible benchmark scripts + result artifacts (latency/throughput).
+- Add security baseline (TLS reverse proxy hardening + role model design).
+
+### P1 (high-value)
+- Enrich vendor classifier features and collect labeled evaluation dataset.
+- Add dashboard pages for discovery logs and exported profiles.
+- Add API integration examples for HES/MDMS payload consumption.
+
+### P2 (next-level)
+- Kubernetes deployment manifests and HPA strategy.
+- Observability stack (metrics + traces + alert rules).
+- Formal test matrix for multi-vendor protocol deviations.
+
+---
+
+## 10) Final technical conclusion
+
+This repository is a strong **software-defined DLMS prototype platform** with complete workflow APIs and practical persistence architecture. It is highly suitable for demonstrations, interoperability research, and integration prototyping. To fully satisfy utility-grade SRS expectations, the next engineering phase should focus on native/proxy protocol-depth validation, measurable performance proof, and enterprise security/operability hardening.

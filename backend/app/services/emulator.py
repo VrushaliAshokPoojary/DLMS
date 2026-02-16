@@ -31,11 +31,31 @@ class EmulatorRegistry:
     def list_templates(self) -> list[MeterTemplate]:
         return list(self._templates.values())
 
+
+    @staticmethod
+    def _default_template(vendor: str, model: str) -> MeterTemplate:
+        return MeterTemplate(
+            vendor=vendor,
+            model=model,
+            referencing="LN",
+            authentication_modes=["None"],
+            security_suites=[0],
+            obis_objects=[
+                ObisObject(
+                    code="1-0:1.8.0",
+                    description="Active energy import",
+                    data_type="double",
+                    unit="kWh",
+                )
+            ],
+        )
+
     def create_instance(self, vendor: str, model: str, ip_address: str, port: int) -> MeterInstance:
         key = self._template_key(vendor, model)
         template = self._templates.get(key)
         if template is None:
-            raise HTTPException(status_code=404, detail="template_not_found")
+            template = self._default_template(vendor, model)
+            self._templates[key] = template
 
         meter_id = str(uuid4())
         instance = MeterInstance(

@@ -4,6 +4,13 @@ import { createInstance, fetchSummary, listTemplates, runWorkflow } from './comp
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const apiKey = import.meta.env.VITE_API_KEY
 
+const initialForm = {
+  vendor: '',
+  model: '',
+  ip_address: '127.0.0.1',
+  port: '4059',
+}
+
 export default function App() {
   const [summary, setSummary] = useState({ templates: 0, instances: 0, profiles: 0 })
   const [templates, setTemplates] = useState([])
@@ -12,10 +19,6 @@ export default function App() {
   const [workflowResult, setWorkflowResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    fetchSummary(apiUrl, apiKey).then(setSummary).catch(() => setSummary(summary))
-  }, [])
 
   async function refreshData() {
     try {
@@ -28,14 +31,18 @@ export default function App() {
       if (templateData.length > 0) {
         setForm((prev) => ({
           ...prev,
-          vendor: templateData[0].vendor,
-          model: templateData[0].model,
+          vendor: prev.vendor || templateData[0].vendor,
+          model: prev.model || templateData[0].model,
         }))
       }
     } catch (err) {
       setError(err.message)
     }
   }
+
+  useEffect(() => {
+    refreshData()
+  }, [])
 
   const filteredModels = useMemo(
     () => templates.filter((t) => t.vendor === form.vendor).map((t) => t.model),

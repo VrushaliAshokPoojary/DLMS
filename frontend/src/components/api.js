@@ -7,12 +7,28 @@ function buildHeaders(apiKey) {
   }
 }
 
+async function toJson(response) {
+  const contentType = response.headers.get('content-type') || ''
+  const isJson = contentType.includes('application/json')
+  const payload = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      typeof payload === 'string'
+        ? payload
+        : payload?.detail || payload?.message || `Request failed with status ${response.status}`
+    throw new Error(message)
+  }
+
+  return payload
+}
+
 export async function fetchSummary(apiUrl, apiKey) {
   const headers = buildHeaders(apiKey)
   const [templates, instances, profiles] = await Promise.all([
-    fetch(`${apiUrl}/emulators/templates`, { headers }).then((res) => res.json()),
-    fetch(`${apiUrl}/emulators/instances`, { headers }).then((res) => res.json()),
-    fetch(`${apiUrl}/profiles`, { headers }).then((res) => res.json()),
+    fetch(`${apiUrl}/emulators/templates`, { headers }).then(toJson),
+    fetch(`${apiUrl}/emulators/instances`, { headers }).then(toJson),
+    fetch(`${apiUrl}/profiles`, { headers }).then(toJson),
   ])
 
   return {

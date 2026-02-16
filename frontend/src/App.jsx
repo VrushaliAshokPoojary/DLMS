@@ -14,7 +14,7 @@ const initialForm = {
 export default function App() {
   const [summary, setSummary] = useState({ templates: 0, instances: 0, profiles: 0 })
   const [templates, setTemplates] = useState([])
-  const [form, setForm] = useState(initialForm)
+  const [form, setForm] = useState({ vendor: '', model: '', ip_address: '127.0.0.1', port: '4059' })
   const [meter, setMeter] = useState(null)
   const [workflowResult, setWorkflowResult] = useState(null)
   const [loading, setLoading] = useState(false)

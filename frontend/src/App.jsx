@@ -4,18 +4,21 @@ import { createInstance, fetchSummary, listTemplates, runWorkflow } from './comp
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const apiKey = import.meta.env.VITE_API_KEY
 
+const initialForm = {
+  vendor: '',
+  model: '',
+  ip_address: '127.0.0.1',
+  port: '4059',
+}
+
 export default function App() {
   const [summary, setSummary] = useState({ templates: 0, instances: 0, profiles: 0 })
   const [templates, setTemplates] = useState([])
-  const [form, setForm] = useState(initialForm)
+  const [form, setForm] = useState({ vendor: '', model: '', ip_address: '127.0.0.1', port: '4059' })
   const [meter, setMeter] = useState(null)
   const [workflowResult, setWorkflowResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    fetchSummary(apiUrl, apiKey).then(setSummary).catch(() => setSummary(summary))
-  }, [])
 
   async function refreshData() {
     try {
@@ -28,14 +31,20 @@ export default function App() {
       if (templateData.length > 0) {
         setForm((prev) => ({
           ...prev,
-          vendor: templateData[0].vendor,
-          model: templateData[0].model,
+          vendor: prev.vendor || templateData[0].vendor,
+          model: prev.model || templateData[0].model,
         }))
       }
     } catch (err) {
       setError(err.message)
     }
   }
+
+  useEffect(() => {
+    refreshData()
+  }, [])
+
+  const hasTemplates = templates.length > 0
 
   const filteredModels = useMemo(
     () => templates.filter((t) => t.vendor === form.vendor).map((t) => t.model),
@@ -45,6 +54,10 @@ export default function App() {
   async function onCreateInstance(event) {
     event.preventDefault()
     setError('')
+    if (!form.vendor || !form.model) {
+      setError('Please provide vendor and model before creating an instance.')
+      return
+    }
     setLoading(true)
     setWorkflowResult(null)
     try {
@@ -94,28 +107,49 @@ export default function App() {
 
         <div className="card" style={{ marginTop: 20 }}>
           <h3>Step 1: Create Virtual Meter</h3>
+          {!hasTemplates && (
+            <p className="muted">
+              No templates found from backend. You can still create an instance by entering vendor and model manually.
+            </p>
+          )}
           <form className="form-grid" onSubmit={onCreateInstance}>
             <label>
               Vendor
-              <select
-                value={form.vendor}
-                onChange={(e) => {
-                  const vendor = e.target.value
-                  const firstModel = templates.find((t) => t.vendor === vendor)?.model || ''
-                  setForm((prev) => ({ ...prev, vendor, model: firstModel }))
-                }}
-              >
-                {[...new Set(templates.map((t) => t.vendor))].map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
+              {hasTemplates ? (
+                <select
+                  value={form.vendor}
+                  onChange={(e) => {
+                    const vendor = e.target.value
+                    const firstModel = templates.find((t) => t.vendor === vendor)?.model || ''
+                    setForm((prev) => ({ ...prev, vendor, model: firstModel }))
+                  }}
+                >
+                  {[...new Set(templates.map((t) => t.vendor))].map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  placeholder="Ex: Acme Energy"
+                  value={form.vendor}
+                  onChange={(e) => setForm((prev) => ({ ...prev, vendor: e.target.value }))}
+                />
+              )}
             </label>
 
             <label>
               Model
-              <select value={form.model} onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))}>
-                {filteredModels.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+              {hasTemplates ? (
+                <select value={form.model} onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))}>
+                  {filteredModels.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              ) : (
+                <input
+                  placeholder="Ex: A1000"
+                  value={form.model}
+                  onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))}
+                />
+              )}
             </label>
 
             <label>

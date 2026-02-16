@@ -38,7 +38,8 @@ Assumptions used:
 | FR-14 | System shall expose REST APIs for integration | **ACHIEVED** | FastAPI surface includes emulator/discovery/association/OBIS/fingerprint/profile/vendor routes. |
 | FR-15 | System shall support bulk discovery operations | **PARTIALLY ACHIEVED** | Request model supports `ip_range`, `ports`, `max_concurrency`, `retries`; practical behavior remains prototype-constrained. |
 
----
+# PostgreSQL proof
+docker compose exec postgres psql -U dlms -d dlms -c "SELECT profile_id,meter_id,vendor,model,created_at FROM meter_profiles ORDER BY created_at DESC LIMIT 10;"
 
 ## 2) End-to-End Working Explanation (Lifecycle)
 
@@ -78,7 +79,8 @@ Assumptions used:
 ### 2.8 API exposure to HES/MDMS
 - Integration surface exposed via REST endpoints and OpenAPI docs (`/docs`).
 
----
+## Slide 2 — Solution
+We built a software-defined DLMS interoperability lab that simulates meters, auto-discovers endpoints, fingerprints protocol behavior, normalizes OBIS data, and exports meter profiles through REST APIs.
 
 ## 3) Data Flow & Storage Architecture
 
@@ -176,7 +178,11 @@ For protocol-true DLMS packet validation:
 2. Capture adapter traffic in Wireshark (filter by adapter port).
 3. Use Gurux Director against adapter/meter simulation route.
 
----
+3. **Q: How is discovery scaled?**  
+   **A:** Discovery expands CIDR ranges and probes with `ThreadPoolExecutor` using configurable concurrency, timeout, and retry controls.
+
+4. **Q: How do you detect auth mode/security suite?**  
+   **A:** In prototype mode they are template-derived. In integration mode adapter responses can provide negotiated values.
 
 ## 5) Presentation Script (Defense-Ready)
 

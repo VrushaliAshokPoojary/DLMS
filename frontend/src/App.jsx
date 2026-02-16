@@ -4,6 +4,13 @@ import { createInstance, fetchSummary, listTemplates, runWorkflow } from './comp
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const apiKey = import.meta.env.VITE_API_KEY
 
+const initialForm = {
+  vendor: '',
+  model: '',
+  ip_address: '127.0.0.1',
+  port: '4059',
+}
+
 export default function App() {
   const [summary, setSummary] = useState({ templates: 0, instances: 0, profiles: 0 })
   const [templates, setTemplates] = useState([])

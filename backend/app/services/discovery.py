@@ -63,7 +63,7 @@ class DiscoveryEngine:
             docs = list(self._collection.find({}, {"_id": 0}))
             return [DiscoveryLog(**doc) for doc in docs]
         except PyMongoError:
-            return list(self._memory_logs)
+            return []
 
     @staticmethod
     def _to_result(instance: MeterInstance) -> DiscoveryResult:

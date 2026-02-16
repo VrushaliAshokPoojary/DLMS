@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.models.core import (
+    AssociationObjectList,
     AssociationReport,
     DiscoveryRequest,
     MeterInstance,
@@ -163,6 +164,16 @@ def associate_meter(meter_id: str) -> AssociationReport:
     if settings.dlms_adapter_url:
         return dlms_client.associate(meter)
     return association_negotiator.negotiate(meter)
+
+
+@app.get("/associations/objects/{meter_id}", response_model=AssociationObjectList, dependencies=[Depends(require_api_key)])
+def association_objects(meter_id: str) -> AssociationObjectList:
+    meter = next((m for m in registry.list_instances() if m.meter_id == meter_id), None)
+    if not meter:
+        raise HTTPException(status_code=404, detail="meter_not_found")
+    if settings.dlms_adapter_url:
+        return dlms_client.fetch_association_objects(meter)
+    return association_negotiator.association_objects(meter)
 
 
 @app.get("/obis/normalize/{meter_id}", response_model=ObisNormalizationResult, dependencies=[Depends(require_api_key)])

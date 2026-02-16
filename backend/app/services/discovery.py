@@ -18,6 +18,7 @@ class DiscoveryEngine:
     def __init__(self, registry: EmulatorRegistry) -> None:
         self._registry = registry
         self._collection = None
+        self._memory_logs: list[DiscoveryLog] = []
         self._init_db()
 
     def _init_db(self) -> None:
@@ -32,12 +33,19 @@ class DiscoveryEngine:
         started_at = datetime.utcnow()
         targets = self._expand_targets(request.ip_range, request.ports)
         results: list[DiscoveryResult] = []
+
         if not targets:
             return results
 
         with ThreadPoolExecutor(max_workers=request.max_concurrency) as executor:
             futures = [
-                executor.submit(self._probe_target, ip, port, request.timeout_seconds, request.retries)
+                executor.submit(
+                    self._probe_target,
+                    ip,
+                    port,
+                    request.timeout_seconds,
+                    request.retries,
+                )
                 for ip, port in targets
             ]
             for future in as_completed(futures):
@@ -50,7 +58,7 @@ class DiscoveryEngine:
 
     def list_logs(self) -> list[DiscoveryLog]:
         if not self._collection:
-            return []
+            return list(self._memory_logs)
         try:
             docs = list(self._collection.find({}, {"_id": 0}))
             return [DiscoveryLog(**doc) for doc in docs]
@@ -88,9 +96,11 @@ class DiscoveryEngine:
     ) -> DiscoveryResult | None:
         if not self._is_port_open(ip_address, port, timeout_seconds, retries):
             return None
+
         instance = self._registry.find_instance(ip_address, port)
         if instance:
             return self._to_result(instance)
+
         return DiscoveryResult(
             meter_id=str(uuid4()),
             ip_address=ip_address,
@@ -134,6 +144,8 @@ class DiscoveryEngine:
             started_at=started_at,
             completed_at=datetime.utcnow(),
         )
+        self._memory_logs.append(log)
+
         if not self._collection:
             return
         try:

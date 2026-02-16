@@ -3,8 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
-
-from sqlalchemy import JSON, Column, DateTime, MetaData, String, Table, create_engine, select
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    select,
+)
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
@@ -51,8 +59,10 @@ class ProfileRepository:
 
     def store(self, profile: MeterProfile) -> None:
         self._profiles[profile.profile_id] = profile
-        if not self._engine or not self._table:
+
+        if self._engine is None or self._table is None:
             return
+
         try:
             with self._engine.begin() as conn:
                 conn.execute(
@@ -69,11 +79,13 @@ class ProfileRepository:
             return
 
     def list(self) -> list[MeterProfile]:
-        if not self._engine or not self._table:
+        if self._engine is None or self._table is None:
             return list(self._profiles.values())
+
         try:
             with self._engine.begin() as conn:
                 rows = conn.execute(select(self._table)).mappings().all()
+
             return [
                 MeterProfile(
                     profile_id=row["profile_id"],

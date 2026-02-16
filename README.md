@@ -6,9 +6,13 @@ This project is a full-stack DLMS/COSEM demo platform with:
 - PostgreSQL storage for generated meter profiles.
 - MongoDB storage for fingerprint and discovery logs.
 
-## 1) How the project is organized
+## 1) Project explanation (what it does)
 
-```
+The platform is designed as a software-defined DLMS lab so you can demonstrate complete utility workflows without depending only on physical meters.
+
+### High-level architecture
+
+```text
 frontend (React + Vite)
    |
    | HTTP/JSON
@@ -20,48 +24,52 @@ backend (FastAPI)
 ```
 
 ### Core directories
-- `backend/` – API app, business logic, DB persistence adapters.
+- `backend/` – API app, business logic, and persistence adapters.
 - `frontend/` – dashboard UI.
 - `infra/` – nginx reverse proxy config.
 - `docker-compose.yml` – local full-stack orchestration.
 
-## 2) Backend behavior (what each module does)
+## 2) Backend workflow (module-by-module)
 
 ### Emulator and templates
-- The backend seeds built-in meter templates at startup.
+- Backend seeds built-in meter templates at startup.
 - You can create virtual meter instances from templates.
 - Endpoints:
   - `GET /emulators/templates`
+  - `POST /emulators/templates`
   - `POST /emulators/instances`
+  - `POST /emulators/instances/bulk`
   - `GET /emulators/instances`
 
 ### Discovery
-- `POST /discovery/scan` returns discovered results.
-- `GET /discovery/logs` returns discovery log documents from MongoDB (if available).
+- `POST /discovery/scan` scans IP range/targets.
+- `GET /discovery/logs` returns discovery logs.
 
 ### Fingerprinting
-- `POST /fingerprints/{meter_id}` generates and stores a fingerprint.
-- `GET /fingerprints` lists stored fingerprints.
+- `POST /fingerprints/{meter_id}` generates and stores fingerprint.
+- `GET /fingerprints` lists fingerprints.
 
 ### Profiles
-- `POST /profiles/{meter_id}` generates and stores a profile in PostgreSQL.
+- `POST /profiles/{meter_id}` generates and stores profile in PostgreSQL.
 - `GET /profiles` lists profiles.
+- `GET /profiles/{meter_id}/export` exports versioned profile payload.
 
 ### DLMS protocol simulation/integration
 - `POST /associations/{meter_id}` returns association report.
+- `GET /associations/objects/{meter_id}` returns association object list.
 - `GET /obis/normalize/{meter_id}` returns normalized OBIS mapping.
 - `GET /dlms/adapter/health` checks adapter status.
 - `GET /vendors/classify/{meter_id}` classifies vendor.
 
 ## 3) Environment variables
 
-Copy `.env.example` to `.env` and edit values:
+Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-### Important variables
+Important variables:
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PORT`
 - `POSTGRES_DRIVER` (default `psycopg`)
 - `MONGO_URL`, `MONGO_DB`
@@ -71,23 +79,36 @@ cp .env.example .env
 - `SEED_SAMPLE_DATA` (`true/false`; seeds demo instances/fingerprints/profiles on backend startup)
 - `DLMS_ADAPTER_URL` (optional external adapter for real protocol operations)
 
-## 4) Run with Docker (recommended)
+## 4) Run neatly with Docker (recommended)
 
 1. Prepare env file:
    ```bash
    cp .env.example .env
    ```
-2. Optional demo-friendly settings in `.env`:
-   - `API_KEY=` (empty for easier demo)
+2. Demo-friendly `.env` values:
+   - `API_KEY=` (empty for easy local demo)
    - `SEED_SAMPLE_DATA=true`
 3. Start all services:
    ```bash
    make up
    ```
-4. Open:
-   - Frontend: `http://localhost:5173`
-   - Backend docs: `http://localhost:8000/docs`
-   - Nginx entrypoint: `http://localhost:8080`
+
+Equivalent command:
+```bash
+docker compose up --build
+```
+
+Open:
+- Frontend: `http://localhost:5173`
+- Backend docs: `http://localhost:8000/docs`
+- Nginx entrypoint: `http://localhost:8080`
+
+Useful commands:
+```bash
+make ps
+make logs
+make down
+```
 
 ## 5) Run locally without Docker
 
@@ -97,75 +118,72 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+If you run backend outside Docker, use local DB host values (example):
+- `POSTGRES_HOST=localhost`
+- `MONGO_URL=mongodb://localhost:27017`
 
 ### Frontend
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-## 6) API usage notes (especially for Windows PowerShell)
+## 6) Clean end-to-end workflow (recommended demo order)
 
-In PowerShell, `curl` maps to `Invoke-WebRequest` and does not accept Linux-style flags like `-X -H -d`.
+1. Start stack (`make up`).
+2. Verify backend health and summary:
+   ```bash
+   curl http://localhost:8000/health
+   curl http://localhost:8000/summary
+   ```
+3. Create one virtual meter instance:
+   ```bash
+   curl -X POST "http://localhost:8000/emulators/instances?vendor=Acme%20Energy&model=A1000&ip_address=127.0.0.1&port=4059"
+   ```
+4. Copy `meter_id`, then run full workflow:
+   ```bash
+   curl -X POST "http://localhost:8000/fingerprints/<METER_ID>"
+   curl -X POST "http://localhost:8000/profiles/<METER_ID>"
+   curl -X POST "http://localhost:8000/associations/<METER_ID>"
+   curl "http://localhost:8000/associations/objects/<METER_ID>"
+   curl "http://localhost:8000/obis/normalize/<METER_ID>"
+   curl "http://localhost:8000/vendors/classify/<METER_ID>"
+   ```
+5. Optional discovery run:
+   ```bash
+   curl -X POST "http://localhost:8000/discovery/scan" \
+     -H "Content-Type: application/json" \
+     -d '{"ip_range":"127.0.0.0/30","ports":[4059],"timeout_ms":500,"max_concurrency":20,"retries":0}'
+   ```
 
-Use one of these approaches:
-- Use the real curl binary: `curl.exe ...`
-- Or use PowerShell cmdlets (`Invoke-RestMethod` / `Invoke-WebRequest`) with PowerShell syntax.
+## 7) DB verification (proof that data is stored)
 
-### Example commands (cross-platform using `curl.exe`)
-
-1. List templates:
+### PostgreSQL (`meter_profiles`)
 ```bash
-curl.exe http://localhost:8000/emulators/templates
+docker compose exec postgres psql -U dlms -d dlms -c "SELECT profile_id,meter_id,vendor,model,created_at FROM meter_profiles ORDER BY created_at DESC LIMIT 10;"
 ```
 
-2. Create meter instance:
+### MongoDB (`fingerprints`, `discovery_logs`)
 ```bash
-curl.exe -X POST "http://localhost:8000/emulators/instances?vendor=Acme%20Energy&model=A1000&ip_address=127.0.0.1&port=4059"
+docker compose exec mongo mongosh --eval "use dlms; db.fingerprints.find({}, {_id:0}).limit(5).pretty(); db.discovery_logs.find({}, {_id:0}).limit(5).pretty();"
 ```
 
-3. List instances (copy `meter_id`):
+## 8) API usage notes (Windows PowerShell)
+
+In PowerShell, `curl` maps to `Invoke-WebRequest` and may not accept Linux-style flags like `-X -H -d`.
+
+Use either:
+- `curl.exe ...`
+- PowerShell cmdlets (`Invoke-RestMethod` / `Invoke-WebRequest`) with PowerShell syntax.
+
+If `API_KEY` is enabled, add:
 ```bash
-curl.exe http://localhost:8000/emulators/instances
+-H "X-API-Key: <your_key>"
 ```
-
-4. Generate fingerprint/profile (replace `<METER_ID>`):
-```bash
-curl.exe -X POST "http://localhost:8000/fingerprints/<METER_ID>"
-curl.exe -X POST "http://localhost:8000/profiles/<METER_ID>"
-```
-
-5. Check discovery logs:
-```bash
-curl.exe http://localhost:8000/discovery/logs
-```
-
-### If `API_KEY` is enabled
-Add header to every request:
-```bash
-curl.exe -H "X-API-Key: <your_key>" http://localhost:8000/emulators/templates
-```
-
-## 7) Data storage details
-
-- PostgreSQL table: `meter_profiles`
-- MongoDB collections:
-  - `fingerprints`
-  - `discovery_logs`
-
-If DB connections fail, the backend falls back to in-memory behavior for some components.
-
-## 8) Typical demo flow
-
-1. Start stack (`docker compose up --build`).
-2. Open `/docs` and verify backend health.
-3. Create one instance from a template.
-4. Generate fingerprint and profile for that meter.
-5. Open frontend and show summary cards updating.
-6. Optionally inspect DB contents directly via Mongo/Postgres clients.
 
 ## 9) Troubleshooting checklist
 
@@ -174,71 +192,23 @@ If DB connections fail, the backend falls back to in-memory behavior for some co
   - If `API_KEY` is set, also set `VITE_API_KEY`.
 - `meter_not_found` errors:
   - Create an instance first and use its actual `meter_id`.
-- PowerShell errors with `-X/-H/-d`:
-  - Use `curl.exe`, not `curl` alias.
+- Discovery returns reachable but unknown endpoint:
+  - This can happen when host:port is reachable but not mapped to a created emulator instance.
 - Backend starts but DB data missing:
   - Verify Postgres/Mongo containers are healthy and env vars are correct.
 
-## License
+## 10) Recent improvements (SRS alignment uplift)
 
+- **Template management API**: `POST /emulators/templates`
+- **Bulk instance provisioning**: `POST /emulators/instances/bulk`
+- **Summary endpoint**: `GET /summary`
+- **Profile export endpoint**: `GET /profiles/{meter_id}/export`
+- **Improved API errors** for missing meters/profiles (`404` behavior)
+
+## License
 MIT
 
 ## 👨‍💻 Author
-
 Vrushali A Poojary
 
-Software Engineering | AIML | DLMS/COSEM 
-
-## 10) Recent improvements (SRS alignment uplift)
-
-The project now includes several concrete upgrades to close key SRS gaps:
-
-- **Template management API**: create new meter templates at runtime.
-  - `POST /emulators/templates`
-- **Bulk instance provisioning** for large simulation setup.
-  - `POST /emulators/instances/bulk`
-- **Summary endpoint** for dashboard/integration quick telemetry.
-  - `GET /summary`
-- **Profile export endpoint** with schema version metadata.
-  - `GET /profiles/{meter_id}/export`
-- **Improved API errors** for missing meters/profiles (`404` instead of silent error payloads).
-
-### Bulk provisioning example
-```bash
-curl -X POST "http://localhost:8000/emulators/instances/bulk"   -H "Content-Type: application/json"   -d '{
-    "vendor":"Acme Energy",
-    "model":"A1000",
-    "base_ip":"10.20.0.10",
-    "start_port":5000,
-    "count":25
-  }'
-```
-
-### Template creation example
-```bash
-curl -X POST "http://localhost:8000/emulators/templates"   -H "Content-Type: application/json"   -d '{
-    "vendor":"Nova Grid",
-    "model":"N200",
-    "referencing":"LN",
-    "authentication_modes":["LLS","HLS"],
-    "security_suites":[1,2],
-    "obis_objects":[
-      {"code":"1-0:1.8.0","description":"Active energy import","data_type":"double","unit":"kWh"}
-    ]
-  }'
-```
-
-## 11) If you want my assistance to complete remaining tasks
-
-To help finish full SRS compliance quickly, please provide these from your side:
-
-1. **Adapter service access details**
-   - Running URL for Gurux/OpenMUC adapter (`DLMS_ADAPTER_URL`), or adapter repo.
-2. **Target test profiles**
-   - 3-5 vendor/model protocol behavior expectations to validate handshake/object extraction.
-3. **Scale test environment budget**
-   - Whether we can run long load tests (k6/Locust) and store report artifacts.
-4. **Acceptance proof format**
-   - Whether your faculty expects PDF report, PPT, or both (I can generate exact structure).
-
-With these inputs, remaining FR/NFR closure can be delivered in a deterministic checklist-driven manner.
+Software Engineering | AIML | DLMS/COSEM

@@ -188,3 +188,57 @@ MIT
 Vrushali A Poojary
 
 Software Engineering | AIML | DLMS/COSEM 
+
+## 10) Recent improvements (SRS alignment uplift)
+
+The project now includes several concrete upgrades to close key SRS gaps:
+
+- **Template management API**: create new meter templates at runtime.
+  - `POST /emulators/templates`
+- **Bulk instance provisioning** for large simulation setup.
+  - `POST /emulators/instances/bulk`
+- **Summary endpoint** for dashboard/integration quick telemetry.
+  - `GET /summary`
+- **Profile export endpoint** with schema version metadata.
+  - `GET /profiles/{meter_id}/export`
+- **Improved API errors** for missing meters/profiles (`404` instead of silent error payloads).
+
+### Bulk provisioning example
+```bash
+curl -X POST "http://localhost:8000/emulators/instances/bulk"   -H "Content-Type: application/json"   -d '{
+    "vendor":"Acme Energy",
+    "model":"A1000",
+    "base_ip":"10.20.0.10",
+    "start_port":5000,
+    "count":25
+  }'
+```
+
+### Template creation example
+```bash
+curl -X POST "http://localhost:8000/emulators/templates"   -H "Content-Type: application/json"   -d '{
+    "vendor":"Nova Grid",
+    "model":"N200",
+    "referencing":"LN",
+    "authentication_modes":["LLS","HLS"],
+    "security_suites":[1,2],
+    "obis_objects":[
+      {"code":"1-0:1.8.0","description":"Active energy import","data_type":"double","unit":"kWh"}
+    ]
+  }'
+```
+
+## 11) If you want my assistance to complete remaining tasks
+
+To help finish full SRS compliance quickly, please provide these from your side:
+
+1. **Adapter service access details**
+   - Running URL for Gurux/OpenMUC adapter (`DLMS_ADAPTER_URL`), or adapter repo.
+2. **Target test profiles**
+   - 3-5 vendor/model protocol behavior expectations to validate handshake/object extraction.
+3. **Scale test environment budget**
+   - Whether we can run long load tests (k6/Locust) and store report artifacts.
+4. **Acceptance proof format**
+   - Whether your faculty expects PDF report, PPT, or both (I can generate exact structure).
+
+With these inputs, remaining FR/NFR closure can be delivered in a deterministic checklist-driven manner.

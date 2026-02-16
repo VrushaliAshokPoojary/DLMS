@@ -10,9 +10,9 @@ function buildHeaders(apiKey) {
 export async function fetchSummary(apiUrl, apiKey) {
   const headers = buildHeaders(apiKey)
   const [templates, instances, profiles] = await Promise.all([
-    fetch(`${apiUrl}/emulators/templates`, { headers }).then((res) => res.json()),
-    fetch(`${apiUrl}/emulators/instances`, { headers }).then((res) => res.json()),
-    fetch(`${apiUrl}/profiles`, { headers }).then((res) => res.json()),
+    fetch(`${apiUrl}/emulators/templates`, { headers }).then(toJson),
+    fetch(`${apiUrl}/emulators/instances`, { headers }).then(toJson),
+    fetch(`${apiUrl}/profiles`, { headers }).then(toJson),
   ])
 
   return {
@@ -46,4 +46,13 @@ export async function runWorkflow(apiUrl, apiKey, meterId) {
   ])
 
   return { fingerprint, profile, association, objects, obis, vendor }
+}
+
+
+async function toJson(response) {
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.detail || data.error || `request_failed_${response.status}`)
+  }
+  return data
 }

@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
-from app.models.core import MeterInstance, MeterProfile
+from app.models.core import MeterInstance, MeterProfile, ProfileExport
 
 
 class ProfileGenerator:
@@ -28,6 +28,14 @@ class ProfileGenerator:
             model=meter.model,
             obis_map={obj.code: obj.description for obj in meter.obis_objects},
             created_at=datetime.utcnow(),
+        )
+
+    @staticmethod
+    def export_profile(profile: MeterProfile) -> ProfileExport:
+        return ProfileExport(
+            schema_version="1.0",
+            exported_at=datetime.utcnow(),
+            profile=profile,
         )
 
 
@@ -99,3 +107,9 @@ class ProfileRepository:
             ]
         except SQLAlchemyError:
             return list(self._profiles.values())
+
+    def latest_by_meter_id(self, meter_id: str) -> MeterProfile | None:
+        profiles = [profile for profile in self.list() if profile.meter_id == meter_id]
+        if not profiles:
+            return None
+        return sorted(profiles, key=lambda item: item.created_at, reverse=True)[0]

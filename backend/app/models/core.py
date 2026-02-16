@@ -32,6 +32,19 @@ class MeterInstance(BaseModel):
     obis_objects: list[ObisObject]
 
 
+class BulkInstanceCreateRequest(BaseModel):
+    vendor: str
+    model: str
+    base_ip: str
+    start_port: int = 4059
+    count: int = Field(default=10, ge=1, le=10000)
+
+
+class BulkInstanceCreateResult(BaseModel):
+    created: int
+    instances: list[MeterInstance]
+
+
 class DiscoveryRequest(BaseModel):
     ip_range: str
     ports: list[int] = Field(default_factory=lambda: [4059])
@@ -39,7 +52,6 @@ class DiscoveryRequest(BaseModel):
 
     timeout_seconds: float = 0.5
     retries: int = 1
-
 
 
 class DiscoveryResult(BaseModel):
@@ -65,7 +77,6 @@ class DiscoveryLog(BaseModel):
     completed_at: datetime
 
 
-
 class Fingerprint(BaseModel):
     meter_id: str
     vendor_signature: str
@@ -73,7 +84,6 @@ class Fingerprint(BaseModel):
     created_at: datetime
 
     vendor_classification: str | None = None
-
 
 
 class MeterProfile(BaseModel):
@@ -84,6 +94,11 @@ class MeterProfile(BaseModel):
     obis_map: dict[str, str]
     created_at: datetime
 
+
+class ProfileExport(BaseModel):
+    schema_version: str
+    exported_at: datetime
+    profile: MeterProfile
 
 
 class AssociationReport(BaseModel):

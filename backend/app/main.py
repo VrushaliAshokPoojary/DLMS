@@ -1,4 +1,3 @@
-
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -8,10 +7,13 @@ from app.config import settings
 from app.models.core import (
     AssociationObjectList,
     AssociationReport,
+    BulkInstanceCreateRequest,
+    BulkInstanceCreateResult,
     DiscoveryRequest,
     MeterInstance,
     MeterTemplate,
     ObisNormalizationResult,
+    ProfileExport,
     VendorClassification,
 )
 from app.services.association import AssociationNegotiator
@@ -23,13 +25,13 @@ from app.services.obis import ObisNormalizer
 from app.services.profiles import ProfileGenerator, ProfileRepository
 from app.services.vendor import VendorClassifier
 
-app = FastAPI(title="DLMS Auto-Discovery Platform", version="0.1.0")
+app = FastAPI(title="DLMS Auto-Discovery Platform", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 registry = EmulatorRegistry()
@@ -74,38 +76,54 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
 
 
 @app.get("/health", dependencies=[Depends(require_api_key)])
-
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/emulators/templates", response_model=list[MeterTemplate], dependencies=[Depends(require_api_key)])
+@app.get("/summary", dependencies=[Depends(require_api_key)])
+def summary() -> dict[str, int]:
+    return {
+        "templates": len(registry.list_templates()),
+        "instances": len(registry.list_instances()),
+        "profiles": len(profile_repo.list()),
+        "fingerprints": len(fingerprint_log.list()),
+    }
 
+
+@app.get("/emulators/templates", response_model=list[MeterTemplate], dependencies=[Depends(require_api_key)])
 def list_templates() -> list[MeterTemplate]:
     return registry.list_templates()
 
 
+@app.post("/emulators/templates", response_model=MeterTemplate, dependencies=[Depends(require_api_key)])
+def create_template(template: MeterTemplate) -> MeterTemplate:
+    return registry.create_template(template)
+
 
 @app.post("/emulators/instances", response_model=MeterInstance, dependencies=[Depends(require_api_key)])
-
 def create_instance(vendor: str, model: str, ip_address: str, port: int = 4059) -> MeterInstance:
     return registry.create_instance(vendor, model, ip_address, port)
 
 
+@app.post(
+    "/emulators/instances/bulk",
+    response_model=BulkInstanceCreateResult,
+    dependencies=[Depends(require_api_key)],
+)
+def create_instances_bulk(request: BulkInstanceCreateRequest) -> BulkInstanceCreateResult:
+    instances = registry.create_instances_bulk(request)
+    return BulkInstanceCreateResult(created=len(instances), instances=instances)
+
 
 @app.get("/emulators/instances", response_model=list[MeterInstance], dependencies=[Depends(require_api_key)])
-
 def list_instances() -> list[MeterInstance]:
     return registry.list_instances()
 
 
-
 @app.post("/discovery/scan", dependencies=[Depends(require_api_key)])
-
 def scan(request: DiscoveryRequest) -> dict[str, object]:
     results = discovery_engine.scan(request)
     return {"count": len(results), "results": results}
-
 
 
 @app.get("/discovery/logs", dependencies=[Depends(require_api_key)])
@@ -114,30 +132,25 @@ def list_discovery_logs() -> dict[str, object]:
 
 
 @app.post("/fingerprints/{meter_id}", dependencies=[Depends(require_api_key)])
-
 def fingerprint_meter(meter_id: str) -> dict[str, object]:
     meter = next((m for m in registry.list_instances() if m.meter_id == meter_id), None)
     if not meter:
-        return {"error": "meter_not_found"}
+        raise HTTPException(status_code=404, detail="meter_not_found")
     fingerprint = fingerprinting_engine.build_fingerprint(meter)
     fingerprint_log.store(fingerprint)
     return {"fingerprint": fingerprint}
 
 
-
 @app.get("/fingerprints", dependencies=[Depends(require_api_key)])
-
 def list_fingerprints() -> dict[str, object]:
     return {"items": fingerprint_log.list()}
 
 
-
 @app.post("/profiles/{meter_id}", dependencies=[Depends(require_api_key)])
-
 def build_profile(meter_id: str) -> dict[str, object]:
     meter = next((m for m in registry.list_instances() if m.meter_id == meter_id), None)
     if not meter:
-        return {"error": "meter_not_found"}
+        raise HTTPException(status_code=404, detail="meter_not_found")
     profile = profile_generator.build_profile(meter)
     profile_repo.store(profile)
     return {"profile": profile}
@@ -146,6 +159,18 @@ def build_profile(meter_id: str) -> dict[str, object]:
 @app.get("/profiles", dependencies=[Depends(require_api_key)])
 def list_profiles() -> dict[str, object]:
     return {"items": profile_repo.list()}
+
+
+@app.get(
+    "/profiles/{meter_id}/export",
+    response_model=ProfileExport,
+    dependencies=[Depends(require_api_key)],
+)
+def export_profile(meter_id: str) -> ProfileExport:
+    profile = profile_repo.latest_by_meter_id(meter_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="profile_not_found")
+    return profile_generator.export_profile(profile)
 
 
 @app.post("/associations/{meter_id}", response_model=AssociationReport, dependencies=[Depends(require_api_key)])
@@ -166,7 +191,11 @@ def associate_meter(meter_id: str) -> AssociationReport:
     return association_negotiator.negotiate(meter)
 
 
-@app.get("/associations/objects/{meter_id}", response_model=AssociationObjectList, dependencies=[Depends(require_api_key)])
+@app.get(
+    "/associations/objects/{meter_id}",
+    response_model=AssociationObjectList,
+    dependencies=[Depends(require_api_key)],
+)
 def association_objects(meter_id: str) -> AssociationObjectList:
     meter = next((m for m in registry.list_instances() if m.meter_id == meter_id), None)
     if not meter:
@@ -176,7 +205,11 @@ def association_objects(meter_id: str) -> AssociationObjectList:
     return association_negotiator.association_objects(meter)
 
 
-@app.get("/obis/normalize/{meter_id}", response_model=ObisNormalizationResult, dependencies=[Depends(require_api_key)])
+@app.get(
+    "/obis/normalize/{meter_id}",
+    response_model=ObisNormalizationResult,
+    dependencies=[Depends(require_api_key)],
+)
 def normalize_obis(meter_id: str) -> ObisNormalizationResult:
     meter = next((m for m in registry.list_instances() if m.meter_id == meter_id), None)
     if not meter:
@@ -191,7 +224,11 @@ def adapter_health() -> dict[str, object]:
     return dlms_client.health()
 
 
-@app.get("/vendors/classify/{meter_id}", response_model=VendorClassification, dependencies=[Depends(require_api_key)])
+@app.get(
+    "/vendors/classify/{meter_id}",
+    response_model=VendorClassification,
+    dependencies=[Depends(require_api_key)],
+)
 def classify_vendor(meter_id: str) -> VendorClassification:
     meter = next((m for m in registry.list_instances() if m.meter_id == meter_id), None)
     if not meter:
